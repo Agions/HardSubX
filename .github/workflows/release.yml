@@ -6,15 +6,9 @@ on:
       - 'v*'
 
 jobs:
-  build-tauri:
-    permissions:
-      contents: write
-    runs-on: ${{ matrix.platform }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ubuntu-22.04, windows-2022, macos-14]
-    
+  build-web:
+    name: Build Web
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,54 +24,45 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       
-      - name: Setup Rust (Ubuntu/Linux)
-        if: runner.os == 'Linux'
-        uses: dtolnay/rust-toolchain@stable
+      - name: Build web
+        run: pnpm build
       
-      - name: Setup Rust (Windows)
-        if: runner.os == 'Windows'
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Setup Rust (macOS)
-        if: runner.os == 'macOS'
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload web artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'VisionSub v${{ github.ref_name }}'
-          releaseBody: |
-            ## VisionSub v${{ github.ref_name }}
-            
-            Download the installer for your platform.
-            
-            See CHANGELOG for details.
-          releaseDraft: false
-          prerelease: false
+          name: visionsub-web
+          path: dist/
 
   create-release:
-    needs: build-tauri
+    needs: build-web
     permissions:
       contents: write
     runs-on: ubuntu-22.04
     steps:
-      - name: Download all artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: '**'
-          path: artifacts
+          name: visionsub-web
+          path: artifacts/
       
-      - name: List artifacts
-        run: find artifacts -type f -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.deb'
+      - name: Create zip
+        run: |
+          cd artifacts
+          zip -r ../visionsub-web.zip .
+          cd ..
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
           prerelease: false
-          files: artifacts/**
+          name: VisionSub ${{ github.ref_name }}
+          body: |
+            ## VisionSub ${{ github.ref_name }}
+            
+            Web build - extract and run with any HTTP server.
+            
+            See CHANGELOG for details.
+          files: visionsub-web.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
