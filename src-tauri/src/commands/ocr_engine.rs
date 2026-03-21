@@ -13,9 +13,9 @@ impl Default for OCREngineConfig {
     fn default() -> Self {
         Self {
             engine: "tesseract".to_string(),
-            language: vec!["ch".to_string(), "en".to_string()],
+            language: vec!["eng".to_string()],
             confidence_threshold: 0.7,
-            use_gpu: true,
+            use_gpu: false,
         }
     }
 }
@@ -49,16 +49,14 @@ pub async fn init_ocr_engine(config: OCREngineConfig) -> Result<String, String> 
     
     match config.engine.as_str() {
         "paddle" => {
-            // PaddleOCR would be initialized here
-            // For now, return mock
-            Ok("paddleocr-initialized".to_string())
+            Err("PaddleOCR native integration not yet implemented".to_string())
         }
         "tesseract" => {
             // Tesseract is used via WASM on frontend
             Ok("tesseract-wasm".to_string())
         }
         "easyocr" => {
-            Ok("easyocr-initialized".to_string())
+            Err("EasyOCR native integration not yet implemented".to_string())
         }
         _ => Err(format!("Unknown OCR engine: {}", config.engine))
     }
@@ -73,29 +71,23 @@ pub async fn process_image_ocr(
 ) -> Result<OCRProcessResult, String> {
     tracing::info!("Processing image with {} OCR engine", config.engine);
     
+    if image_data.is_empty() {
+        return Err("Image data is empty".to_string());
+    }
+    
+    if width == 0 || height == 0 {
+        return Err("Invalid image dimensions".to_string());
+    }
+    
     let start = std::time::Instant::now();
     
-    // Mock result for demonstration
-    // Real implementation would call native OCR library
-    let result = OCRProcessResult {
-        items: vec![
-            OCRResultItem {
-                text: "Sample Text".to_string(),
-                confidence: 0.95,
-                bounding_box: BoundingBox {
-                    x: 10,
-                    y: 10,
-                    width: 200,
-                    height: 40,
-                },
-            },
-        ],
-        full_text: "Sample Text".to_string(),
-        language_detected: "en".to_string(),
-        processing_time_ms: start.elapsed().as_millis() as u64,
-    };
+    // OCR processing requires native library integration
+    // Native Rust OCR libraries are limited, so we recommend using Tesseract.js on frontend
     
-    Ok(result)
+    Err(format!(
+        "Native OCR processing not yet implemented. Use Tesseract.js on frontend for {} engine",
+        config.engine
+    ))
 }
 
 #[tauri::command]
@@ -112,27 +104,30 @@ pub async fn process_roi_ocr(
     tracing::info!("Processing ROI ({}, {}) {}x{} with {} engine", 
         roi_x, roi_y, roi_width, roi_height, config.engine);
     
+    if image_data.is_empty() {
+        return Err("Image data is empty".to_string());
+    }
+    
+    if roi_width == 0 || roi_height == 0 {
+        return Err("ROI has invalid dimensions".to_string());
+    }
+    
     let start = std::time::Instant::now();
     
-    // Extract ROI from image data
-    // Real implementation would handle this properly
-    
-    let result = OCRProcessResult {
-        items: vec![],
-        full_text: String::new(),
-        language_detected: "unknown".to_string(),
-        processing_time_ms: start.elapsed().as_millis() as u64,
-    };
-    
-    Ok(result)
+    Err(format!(
+        "ROI-based OCR processing not yet implemented for {} engine",
+        config.engine
+    ))
 }
 
 #[tauri::command]
 pub fn get_available_ocr_engines() -> HashMap<String, bool> {
     let mut engines = HashMap::new();
-    engines.insert("tesseract".to_string(), true); // Always available (WASM)
-    engines.insert("paddle".to_string(), false); // Requires native binding
-    engines.insert("easyocr".to_string(), false); // Requires native binding
+    // Tesseract.js is available via frontend WASM
+    engines.insert("tesseract".to_string(), true);
+    // Native engines require library integration
+    engines.insert("paddle".to_string(), false);
+    engines.insert("easyocr".to_string(), false);
     engines
 }
 
@@ -142,20 +137,20 @@ pub fn get_ocr_engine_info(engine: String) -> Result<serde_json::Value, String> 
         "tesseract" => Ok(serde_json::json!({
             "name": "Tesseract.js",
             "type": "wasm",
-            "languages": ["eng", "chi_sim", "chi_tra", "jpn", "kor"],
+            "languages": ["eng", "chi_sim", "chi_tra", "jpn", "kor", "fra", "deu", "spa", "por", "ita"],
             "gpu_support": false,
             "accuracy": "medium",
             "speed": "fast",
-            "description": "Pure JavaScript OCR using WebAssembly. Fast and works in browser."
+            "description": "Pure JavaScript OCR using WebAssembly. Works in browser without native installation."
         })),
         "paddle" => Ok(serde_json::json!({
             "name": "PaddleOCR",
             "type": "native",
-            "languages": ["ch", "en", "ja", "ko", "fr", "de", "es"],
+            "languages": ["ch", "en", "ja", "ko", "fr", "de", "es", "ru", "ar"],
             "gpu_support": true,
             "accuracy": "high",
             "speed": "medium",
-            "description": "BAIDU's OCR engine. High accuracy, requires native installation."
+            "description": "BAIDU's OCR engine. High accuracy, especially for Chinese. Requires native Rust bindings."
         })),
         "easyocr" => Ok(serde_json::json!({
             "name": "EasyOCR",
@@ -164,8 +159,8 @@ pub fn get_ocr_engine_info(engine: String) -> Result<serde_json::Value, String> 
             "gpu_support": true,
             "accuracy": "high",
             "speed": "slow",
-            "description": "Python-based OCR. Supports many languages but slower."
+            "description": "Python-based OCR with broad language support. Requires Python integration."
         })),
-        _ => Err(format!("Unknown OCR engine: {}", engine))
+        _ => Err(format!("Unknown OCR engine: {}. Available: tesseract, paddle, easyocr", engine))
     }
 }

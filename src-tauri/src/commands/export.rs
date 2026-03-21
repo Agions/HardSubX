@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use super::video::{ROI, BoundingBox};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +45,93 @@ impl ExportFormat {
     }
 }
 
+fn format_timestamp_srt(seconds: f64) -> String {
+    let hours = (seconds / 3600.0).floor() as u32;
+    let minutes = ((seconds % 3600.0) / 60.0).floor() as u32;
+    let secs = (seconds % 60.0).floor() as u32;
+    let millis = ((seconds % 1.0) * 1000.0).floor() as u32;
+    format!("{:02}:{:02}:{:02},{:03}", hours, minutes, secs, millis)
+}
+
+fn format_timestamp_vtt(seconds: f64) -> String {
+    let hours = (seconds / 3600.0).floor() as u32;
+    let minutes = ((seconds % 3600.0) / 60.0).floor() as u32;
+    let secs = (seconds % 60.0).floor() as u32;
+    let millis = ((seconds % 1.0) * 1000.0).floor() as u32;
+    format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, secs, millis)
+}
+
+fn export_as_srt(subtitles: &[SubtitleItem]) -> String {
+    subtitles.iter()
+        .enumerate()
+        .map(|(i, sub)| {
+            let start = format_timestamp_srt(sub.start_time);
+            let end = format_timestamp_srt(sub.end_time);
+            format!("{}\n{} --> {}\n{}\n", i + 1, start, end, sub.text)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn export_as_vtt(subtitles: &[SubtitleItem]) -> String {
+    let mut output = String::from("WEBVTT\n\n");
+    output.push_str(&subtitles.iter()
+        .enumerate()
+        .map(|(i, sub)| {
+            let start = format_timestamp_vtt(sub.start_time);
+            let end = format_timestamp_vtt(sub.end_time);
+            format!("{}\n{} --> {}\n{}\n", i + 1, start, end, sub.text)
+        })
+        .collect::<Vec<_>>()
+        .join("\n"));
+    output
+}
+
+fn export_as_txt(subtitles: &[SubtitleItem]) -> String {
+    subtitles.iter()
+        .map(|sub| sub.text.clone())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn export_as_json(subtitles: &[SubtitleItem]) -> String {
+    let output = serde_json::json!({
+        "version": "3.0",
+        "generatedAt": chrono_lite_now(),
+        "tool": "VisionSub",
+        "subtitleCount": subtitles.len(),
+        "subtitles": subtitles.iter().map(|sub| {
+            serde_json::json!({
+                "id": sub.id,
+                "index": sub.index,
+                "startTime": sub.start_time,
+                "endTime": sub.end_time,
+                "startFrame": sub.start_frame,
+                "endFrame": sub.end_frame,
+                "text": sub.text,
+                "confidence": sub.confidence,
+                "language": sub.language,
+            })
+        }).collect::<Vec<_>>()
+    });
+    serde_json::to_string_pretty(&output).unwrap_or_default()
+}
+
+fn chrono_lite_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = duration.as_secs();
+    // Simple ISO8601-like format without external dependencies
+    let days = secs / 86400;
+    let remaining = secs % 86400;
+    let hours = remaining / 3600;
+    let minutes = (remaining % 3600) / 60;
+    let seconds = remaining % 60;
+    format!("1970-01-01T{:02}:{:02}:{:02}Z (Unix timestamp: {})", hours, minutes, seconds, secs)
+}
+
 #[tauri::command]
 pub async fn export_subtitles(
     subtitles: Vec<SubtitleItem>,
@@ -49,7 +139,27 @@ pub async fn export_subtitles(
     output_path: String,
 ) -> Result<String, String> {
     tracing::info!("Exporting {} subtitles to {:?} at {}", subtitles.len(), format, output_path);
-    // TODO: Implement subtitle export
+    
+    if subtitles.is_empty() {
+        return Err("No subtitles to export".to_string());
+    }
+    
+    let content = match format {
+        ExportFormat::SRT => export_as_srt(&subtitles),
+        ExportFormat::WebVTT => export_as_vtt(&subtitles),
+        ExportFormat::ASS => return Err("ASS export not yet implemented".to_string()),
+        ExportFormat::JSON => export_as_json(&subtitles),
+        ExportFormat::TXT => export_as_txt(&subtitles),
+    };
+    
+    let path = Path::new(&output_path);
+    let mut file = File::create(path)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+    
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    tracing::info!("Successfully exported subtitles to {}", output_path);
     Ok(output_path)
 }
 
@@ -60,10 +170,35 @@ pub async fn export_multiple_formats(
     formats: Vec<String>,
 ) -> Result<Vec<String>, String> {
     tracing::info!("Exporting {} subtitles to multiple formats: {:?}", subtitles.len(), formats);
-    // TODO: Implement multi-format export
-    let mut outputs = Vec::new();
-    for format in formats {
-        outputs.push(format!("{}.{}", base_path, format));
+    
+    if subtitles.is_empty() {
+        return Err("No subtitles to export".to_string());
     }
+    
+    let mut outputs = Vec::new();
+    let base = Path::new(&base_path);
+    let stem = base.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("subtitle");
+    let dir = base.parent().unwrap_or(Path::new("."));
+    
+    for format in formats {
+        let ext = format.to_lowercase();
+        let filename = format!("{}.{}", stem, ext);
+        let output_path = dir.join(&filename);
+        
+        let export_format = ExportFormat::from_str(&ext);
+        match export_subtitles(subtitles.clone(), export_format, output_path.to_string_lossy().to_string()).await {
+            Ok(path) => outputs.push(path),
+            Err(e) => {
+                tracing::warn!("Failed to export {}: {}", ext, e);
+            }
+        }
+    }
+    
+    if outputs.is_empty() {
+        return Err("Failed to export to any format".to_string());
+    }
+    
     Ok(outputs)
 }
