@@ -1,0 +1,51 @@
+name: ✨ Feature Request
+description: 为 VisionSub 提出新功能建议
+title: "[Feature] "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ 功能建议
+
+        请描述您希望添加的新功能。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "解决的问题"
+      description: "这个功能解决了什么问题？"
+      placeholder: |
+        我遇到的问题是...
+        在某些场景下...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "期望的解决方案"
+      description: "您期望这个功能如何工作？"
+      placeholder: |
+        期望的功能应该...
+        能够...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "替代方案"
+      description: "您考虑过哪些替代方案？"
+      placeholder: |
+        我尝试过的替代方案...
+        但它们有这些缺点...
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "其他信息"
+      description: "是否有其他相关信息？"
+      placeholder: |
+        附加信息...

@@ -1,0 +1,84 @@
+name: 🐛 Bug Report
+description: 报告 VisionSub 中的 bug
+title: "[Bug] "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐛 Bug 描述
+
+        请简要描述您遇到的 bug。
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "复现步骤"
+      description: "如何复现此问题？"
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "预期行为"
+      description: "您期望发生什么？"
+      placeholder: "预期行为是..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "实际行为"
+      description: "实际发生了什么？"
+      placeholder: "实际行为是..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "相关日志/截图"
+      description: "如有错误日志或截图，请在此处粘贴。"
+      placeholder: |
+        ```
+        错误日志...
+        ```
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: "版本"
+      description: "您使用的是哪个版本？"
+      options:
+        - v3.0.0
+        - v2.x.x
+        - v1.x.x
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: "平台"
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - CLI
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "其他信息"
+      description: "是否有其他相关信息？"
+      placeholder: "其他信息..."
