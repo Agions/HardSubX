@@ -18,8 +18,8 @@ pub struct OCRResult {
 impl Default for OCRConfig {
     fn default() -> Self {
         Self {
-            engine: "paddle".to_string(),
-            language: vec!["ch".to_string()],
+            engine: "tesseract".to_string(),
+            language: vec!["eng".to_string()],
             confidence_threshold: 0.7,
         }
     }
@@ -33,17 +33,26 @@ pub async fn process_frame(
     config: OCRConfig,
 ) -> Result<OCRResult, String> {
     tracing::info!("Processing frame with OCR engine: {}", config.engine);
-    // TODO: Implement OCR with PaddleOCR/EasyOCR/Tesseract
-    Ok(OCRResult {
-        text: "Sample Text".to_string(),
-        confidence: 0.95,
-        bounding_box: BoundingBox {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        },
-    })
+    
+    if frame_data.is_empty() {
+        return Err("Frame data is empty".to_string());
+    }
+    
+    if width == 0 || height == 0 {
+        return Err("Invalid frame dimensions".to_string());
+    }
+    
+    // OCR processing requires native library integration
+    // For Tesseract: use tesseract-rs or call tesseract CLI
+    // For PaddleOCR: use paddleocr-rs
+    // This is a placeholder - actual implementation depends on chosen OCR engine
+    
+    tracing::info!("OCR processing requires native {} integration", config.engine);
+    
+    Err(format!(
+        "OCR engine '{}' not yet integrated. Use Tesseract.js on frontend or integrate native {} library",
+        config.engine, config.engine
+    ))
 }
 
 #[tauri::command]
@@ -55,15 +64,21 @@ pub async fn process_roi(
     config: OCRConfig,
 ) -> Result<OCRResult, String> {
     tracing::info!("Processing ROI: {:?} with OCR engine: {}", roi, config.engine);
-    // TODO: Implement ROI-based OCR
-    Ok(OCRResult {
-        text: "ROI Sample Text".to_string(),
-        confidence: 0.92,
-        bounding_box: BoundingBox {
-            x: roi.x,
-            y: roi.y,
-            width: roi.width,
-            height: roi.height,
-        },
-    })
+    
+    if frame_data.is_empty() {
+        return Err("Frame data is empty".to_string());
+    }
+    
+    // Validate ROI dimensions
+    if roi.width == 0 || roi.height == 0 {
+        return Err("ROI has invalid dimensions".to_string());
+    }
+    
+    // ROI-based OCR processing
+    tracing::info!("ROI-based OCR requires native {} integration", config.engine);
+    
+    Err(format!(
+        "OCR engine '{}' not yet integrated for ROI processing",
+        config.engine
+    ))
 }

@@ -41,7 +41,6 @@ function toggleLanguage(id: string) {
 function handleStartExtraction() {
   if (!projectStore.hasVideo) return
   subtitleStore.startExtraction()
-  // TODO: Start extraction process
 }
 
 function handleStopExtraction() {
