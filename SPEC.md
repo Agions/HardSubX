@@ -507,15 +507,18 @@ anyhow = "1.0"         # 错误处理
 - [x] 文件导出功能 (useFileOperations composable)
 - [x] Rust 文件操作命令
 
-### 🚧 Phase 3: 高级功能 (进行中)
-- [ ] 场景检测优化
-- [ ] 批处理支持
-- [ ] 更多 OCR 引擎集成
+### ✅ Phase 3: 高级功能 (进行中)
+- [x] 场景检测优化 (跳过相似帧)
+- [x] 批处理支持 (useBatchProcessor composable)
+- [x] 字幕提取器 (useSubtitleExtractor composable)
+- [x] ASS 字幕导出
+- [ ] 更多 OCR 引擎集成 (PaddleOCR native)
 
-### 📋 Phase 4: 打磨发布 (待开始)
+### 🚧 Phase 4: 打磨发布 (进行中)
 - [x] 设置页面 (SettingsView)
+- [x] 键盘快捷键 (useKeyboardShortcuts)
+- [x] 时间轴组件 (Timeline)
 - [ ] 主题系统 (dark/light)
-- [ ] 快捷键支持
 - [ ] 安装包构建
 - [ ] 文档完善
 
