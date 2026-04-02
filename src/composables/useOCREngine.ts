@@ -365,5 +365,6 @@ export function useOCREngine() {
     processMultiPass,
     terminate,
     applyPreprocessing,
+    safeExtractROI,  // expose ROI extraction utility
   }
 }
