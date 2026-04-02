@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { SubtitleItem, SubtitleEdit, ExportFormats } from '@/types/subtitle'
+import type { SubtitleItem, SubtitleEdit, EditableField, EditableValue, ExportFormats } from '@/types/subtitle'
 import { formatSRT, formatWebVTT, formatASS, formatSSA, formatJSON, formatLRC, formatSBV, formatCSV } from '@/types/subtitle'
 
 export const useSubtitleStore = defineStore('subtitle', () => {
@@ -56,11 +56,19 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     historyIndex.value = -1
   }
   
+  // Insert in sorted position (avoids full sort + reindex on every add)
   function addSubtitle(sub: SubtitleItem) {
-    subtitles.value.push(sub)
-    subtitles.value.sort((a, b) => a.startTime - b.startTime)
-    // Re-index
-    subtitles.value.forEach((sub, i) => sub.index = i + 1)
+    const arr = subtitles.value
+    // Binary search for insertion point
+    let lo = 0, hi = arr.length
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (arr[mid].startTime < sub.startTime) lo = mid + 1
+      else hi = mid
+    }
+    arr.splice(lo, 0, sub)
+    // Re-index only from insertion point
+    for (let i = lo; i < arr.length; i++) arr[i].index = i + 1
   }
   
   function updateSubtitle(id: string, updates: Partial<SubtitleItem>) {
@@ -72,14 +80,13 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   
   function deleteSubtitle(id: string) {
     const index = subtitles.value.findIndex(s => s.id === id)
-    if (index !== -1) {
-      subtitles.value.splice(index, 1)
-      // Re-index
-      subtitles.value.forEach((sub, i) => sub.index = i + 1)
+    if (index === -1) return
+    subtitles.value.splice(index, 1)
+    // Re-index only from deleted position onward
+    for (let i = index; i < subtitles.value.length; i++) {
+      subtitles.value[i].index = i + 1
     }
-    if (selectedId.value === id) {
-      selectedId.value = null
-    }
+    if (selectedId.value === id) selectedId.value = null
   }
   
   function selectSubtitle(id: string | null) {
@@ -103,68 +110,63 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     extractProgress.value = 100
   }
   
-  // Edit with history
-  function editSubtitle(id: string, field: 'text' | 'startTime' | 'endTime', oldValue: string | number, newValue: string | number) {
+  // Edit with history — type-safe field update
+  function applyFieldEdit(sub: SubtitleItem, field: EditableField, value: EditableValue) {
+    if (field === 'text') {
+      sub.text = value as string
+      sub.edited = true
+    } else if (field === 'startTime') {
+      sub.startTime = value as number
+    } else if (field === 'endTime') {
+      sub.endTime = value as number
+    }
+  }
+
+  function editSubtitle(id: string, field: EditableField, oldValue: EditableValue, newValue: EditableValue) {
     const sub = subtitles.value.find(s => s.id === id)
     if (!sub) return
-    
-    // Record edit
+
+    // Record edit for undo/redo
     const edit: SubtitleEdit = { id, field, oldValue, newValue }
     editHistory.value = editHistory.value.slice(0, historyIndex.value + 1)
     editHistory.value.push(edit)
     historyIndex.value = editHistory.value.length - 1
-    
-    // Apply edit
-    ;(sub as any)[field] = newValue
-    if (field === 'text') {
-      sub.edited = true
-    }
+
+    applyFieldEdit(sub, field, newValue)
   }
   
   function undo() {
     if (!canUndo.value) return
     const edit = editHistory.value[historyIndex.value]
     const sub = subtitles.value.find(s => s.id === edit.id)
-    if (sub) {
-      ;(sub as any)[edit.field] = edit.oldValue
-    }
+    if (sub) applyFieldEdit(sub, edit.field, edit.oldValue)
     historyIndex.value--
   }
-  
+
   function redo() {
     if (!canRedo.value) return
     historyIndex.value++
     const edit = editHistory.value[historyIndex.value]
+    if (!edit) return  // guard against out-of-bounds after last edit
     const sub = subtitles.value.find(s => s.id === edit.id)
-    if (sub) {
-      ;(sub as any)[edit.field] = edit.newValue
-    }
+    if (sub) applyFieldEdit(sub, edit.field, edit.newValue)
   }
   
-  // Export
-  function exportToFormat(format: 'srt' | 'vtt' | 'ass' | 'ssa' | 'json' | 'txt' | 'lrc' | 'sbv' | 'csv'): string {
-    switch (format) {
-      case 'srt':
-        return formatSRT(subtitles.value)
-      case 'vtt':
-        return formatWebVTT(subtitles.value)
-      case 'ass':
-        return formatASS(subtitles.value)
-      case 'ssa':
-        return formatSSA(subtitles.value)
-      case 'json':
-        return formatJSON(subtitles.value)
-      case 'txt':
-        return subtitles.value.map(sub => sub.text).join('\n')
-      case 'lrc':
-        return formatLRC(subtitles.value)
-      case 'sbv':
-        return formatSBV(subtitles.value)
-      case 'csv':
-        return formatCSV(subtitles.value)
-      default:
-        return ''
-    }
+  // Export dispatch table (avoids switch/case branching)
+  const EXPORTERS: Record<string, () => string> = {
+    srt: () => formatSRT(subtitles.value),
+    vtt: () => formatWebVTT(subtitles.value),
+    ass: () => formatASS(subtitles.value),
+    ssa: () => formatSSA(subtitles.value),
+    json: () => formatJSON(subtitles.value),
+    txt: () => subtitles.value.map(sub => sub.text).join('\n'),
+    lrc: () => formatLRC(subtitles.value),
+    sbv: () => formatSBV(subtitles.value),
+    csv: () => formatCSV(subtitles.value),
+  }
+
+  function exportToFormat(format: keyof typeof EXPORTERS): string {
+    return EXPORTERS[format]?.() ?? ''
   }
   
   function clearAll() {

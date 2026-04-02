@@ -19,49 +19,17 @@ export function useSubtitleExtractor() {
 
   // Scene detection: skip frames that are too similar
   function detectSceneChange(prevFrame: ImageData, currFrame: ImageData, threshold: number = 0.3): boolean {
-    // Simple histogram comparison
-    let diff = 0
     const sampleSize = Math.min(prevFrame.data.length, currFrame.data.length, 1000)
-    
+    let diff = 0
+
     for (let i = 0; i < sampleSize; i += 4) {
-      // Compare RGB values
       const rDiff = Math.abs(prevFrame.data[i] - currFrame.data[i])
       const gDiff = Math.abs(prevFrame.data[i + 1] - currFrame.data[i + 1])
       const bDiff = Math.abs(prevFrame.data[i + 2] - currFrame.data[i + 2])
       diff += (rDiff + gDiff + bDiff) / 3
     }
-    
-    const avgDiff = diff / (sampleSize / 4)
-    return avgDiff > threshold * 255
-  }
 
-  // Extract ROI from full frame
-  function extractROIFromFrame(frame: ImageData, roi: ROI): ImageData {
-    const { x, y, width, height, unit } = roi
-    
-    // Convert percentage to pixels
-    const left = unit === 'percent' ? (x / 100) * frame.width : x
-    const top = unit === 'percent' ? (y / 100) * frame.height : y
-    const w = unit === 'percent' ? (width / 100) * frame.width : width
-    const h = unit === 'percent' ? (height / 100) * frame.height : height
-
-    const roiData = new ImageData(Math.floor(w), Math.floor(h))
-    
-    for (let py = 0; py < Math.floor(h); py++) {
-      for (let px = 0; px < Math.floor(w); px++) {
-        const srcIdx = ((Math.floor(top) + py) * frame.width + Math.floor(left) + px) * 4
-        const dstIdx = (py * Math.floor(w) + px) * 4
-        
-        if (srcIdx + 3 < frame.data.length && dstIdx + 3 < roiData.data.length) {
-          roiData.data[dstIdx] = frame.data[srcIdx]
-          roiData.data[dstIdx + 1] = frame.data[srcIdx + 1]
-          roiData.data[dstIdx + 2] = frame.data[srcIdx + 2]
-          roiData.data[dstIdx + 3] = 255
-        }
-      }
-    }
-    
-    return roiData
+    return (diff / (sampleSize / 4)) > threshold * 255
   }
 
   // Process single frame
@@ -71,7 +39,11 @@ export function useSubtitleExtractor() {
     roi: ROI,
     ocrConfig: OCRConfig
   ): Promise<SubtitleItem | null> {
-    const roiData = extractROIFromFrame(frame, roi)
+    // Delegate ROI extraction to OCREngine (avoids duplicate implementation)
+    const roiData = ocrEngine.safeExtractROI(
+      frame,
+      roi.x, roi.y, roi.width, roi.height
+    )
     const result = await ocrEngine.processROI(roiData, roi, ocrConfig)
     
     if (result.text.trim().length === 0) {
@@ -112,16 +84,8 @@ export function useSubtitleExtractor() {
     extractedCount.value = 0
     totalFrames.value = projectStore.videoMeta.totalFrames
 
-    // Initialize OCR engine
-    const langMap: Record<string, string[]> = {
-      ch: ['eng', 'chi_sim'],
-      en: ['eng'],
-      ja: ['eng', 'jpn'],
-      ko: ['eng', 'kor']
-    }
-    
-    const langs = langMap[ocrConfig.language[0]] || ['eng']
-    await ocrEngine.init('tesseract', langs)
+    // Initialize OCR engine — use config's engine and language mapping
+    await ocrEngine.init(ocrConfig.engine, ocrConfig.language)
 
     subtitleStore.startExtraction()
 

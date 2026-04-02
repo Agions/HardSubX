@@ -16,11 +16,14 @@ export interface SubtitleItem {
   edited: boolean         // has been manually edited
 }
 
+export type EditableField = 'text' | 'startTime' | 'endTime'
+export type EditableValue = string | number
+
 export interface SubtitleEdit {
   id: string
-  field: 'text' | 'startTime' | 'endTime'
-  oldValue: string | number
-  newValue: string | number
+  field: EditableField
+  oldValue: EditableValue
+  newValue: EditableValue
 }
 
 export interface SubtitleExportOptions {
