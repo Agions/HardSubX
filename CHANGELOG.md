@@ -1,5 +1,31 @@
 # 更新日志
 
+## [3.2.0] - 2026-04-04
+
+### 新增
+
+- ✨ **置信度过滤器 + 批量操作**（Phase 3/4）：
+  - SubtitleList 四档过滤器（全部 / 高 / 中 / 低），实时显示各档字幕数量
+  - 低置信度徽章脉冲动画警告（⚠️），点击直接跳转过滤视图
+  - 批量删除低置信度字幕按钮，一键清理质量不合格字幕
+  - 阈值滑块下方实时显示"将排除 N 条低于 X% 的字幕"，并提供快捷跳转链接
+- ✨ **高级 OCR 后处理管道**（Phase 4）：
+  - `filterJitterSubtitles`：过滤极短时间 OCR 噪声帧，自动吸收进相邻字幕
+  - `mergeSplitSubtitles`：检测被场景间隔断的相同字幕（≤1.5s 间隔），跨段合并
+  - `calibrateConfidenceEnhanced`：精细置信度评分（CJK 括号校验 / Latin 全大写惩罚 / 句子完整性检测 / 字符多样性分析）
+  - `detectTextQualityIssues`：返回结构化质量问题列表，供 UI 提示
+
+### 改进
+
+- ⚡️ **阈值标准化**：`getConfidenceLevel()` 统一为 ≥0.85 高 / ≥0.60 中 / <0.60 低，消除 UI 和过滤器阈值不一致问题
+- ⚡️ **PaddleOCR Native 集成**（Phase 1）：Python bridge (`src-tauri/scripts/paddle_ocr.py`)，支持 CPU 模式，ROI 百分比自动转换，stdin JSON 接口
+- 📝 **PADDLEOCR_SETUP.md**：PaddleOCR 安装配置指南（pip install paddlepaddle + paddleocr）
+
+### 重构
+
+- 🔧 **confidence threshold 常量**：统一 CONFIDENCE_HIGH (0.85) / CONFIDENCE_MID (0.60) 到 `types/video.ts`
+- 🔧 **SubtitleLite 类型**：后处理函数使用独立 SubtitleLite 类型，避免耦合完整 SubtitleItem
+
 ## [3.1.1] - 2026-04-02
 
 ### 新增
