@@ -7,8 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build",
-    "devtools": true
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -27,7 +26,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https://asset.localhost; connect-src 'self' ipc: tauri:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self' blob:; media-src 'self' asset: blob: https://asset.localhost"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https://asset.localhost; connect-src 'self' ipc: tauri:; font-src 'self' data:; worker-src 'self' blob:; frame-src 'self' blob:; media-src 'self' asset: blob: https://asset.localhost",
+      "devtools": true
     }
   },
   "bundle": {
