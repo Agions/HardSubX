@@ -1,52 +1,94 @@
 // ============================================
-// HardSubX Global Styles
+// HardSubX Global Styles v2.0
+// Impeccable Design System
 // ============================================
 
 @import 'reset';
 @import 'variables';
 @import 'mixins';
 
-// CSS Variables - Default Dark Theme
+// ── Google Fonts Import ─────────────────────────────────────
+// DM Sans: distinctive, modern sans-serif
+// JetBrains Mono: for code/mono contexts
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+// ── CSS Variables ─────────────────────────────────────────────
 :root {
-  --primary: #0A84FF;
-  --secondary: #00D4AA;
-  --accent: #BF5AF2;
-  --bg-base: #0D0D0F;
-  --bg-surface: #151518;
-  --bg-elevated: #1C1C21;
-  --bg-overlay: #232328;
-  --text-primary: #FFFFFF;
-  --text-secondary: #98989D;
-  --text-muted: #5C5C61;
-  --border: #2C2C31;
-  --border-light: #3A3A40;
-  --success: #30D158;
-  --warning: #FFD60A;
-  --error: #FF453A;
-  --info: #64D2FF;
+  // Colors - Dark Theme (default)
+  --primary: #{$primary};
+  --secondary: #{$secondary};
+  --accent: #{$accent};
+  
+  --bg-base:     #{$gray-950};
+  --bg-surface:  #{$gray-900};
+  --bg-elevated: #{$gray-800};
+  --bg-overlay:  #{$gray-750};
+  
+  --text-primary:   #{$gray-100};
+  --text-secondary: #{$gray-300};
+  --text-muted:     #{$gray-500};
+  
+  --border:       #{$gray-700};
+  --border-light: #{$gray-600};
+  
+  --success: #{$success};
+  --warning: #{$warning};
+  --error:   #{$error};
+  --info:    #{$info};
+  
+  // Confidence colors
+  --conf-high: #{$conf-high};
+  --conf-mid:  #{$conf-mid};
+  --conf-low:  #{$conf-low};
+  
+  // Radii
+  --radius-sm:   #{$radius-sm};
+  --radius-md:   #{$radius-md};
+  --radius-lg:   #{$radius-lg};
+  --radius-xl:   #{$radius-xl};
+  --radius-full: #{$radius-full};
+  
+  // Shadows
+  --shadow-xs: #{$shadow-xs};
+  --shadow-sm: #{$shadow-sm};
+  --shadow-md: #{$shadow-md};
+  --shadow-lg: #{$shadow-lg};
+  --shadow-xl: #{$shadow-xl};
+  
+  // Focus
+  --focus-ring: #{$focus-ring};
 }
 
-// Light Theme Override
+// ── Light Theme ──────────────────────────────────────────────
 [data-theme="light"] {
   --primary: #007AFF;
   --secondary: #00B48D;
   --accent: #AF52DE;
-  --bg-base: #F5F5F7;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #FAFAFA;
-  --bg-overlay: #E8E8ED;
-  --text-primary: #1D1D1F;
-  --text-secondary: #6E6E73;
-  --text-muted: #AEAEB2;
-  --border: #D2D2D7;
-  --border-light: #E5E5EA;
+  
+  --bg-base:     #F8F8FA;
+  --bg-surface:  #FFFFFF;
+  --bg-elevated: #F2F2F5;
+  --bg-overlay:  #ECECEF;
+  
+  --text-primary:   #1A1A1F;
+  --text-secondary: #5C5C66;
+  --text-muted:     #9898A0;
+  
+  --border:       #DEDEDF;
+  --border-light: #ECECED;
+  
   --success: #34C759;
   --warning: #FF9F0A;
-  --error: #FF3B30;
-  --info: #007AFF;
+  --error:   #FF3B30;
+  --info:    #007AFF;
+  
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-// Base
+// ── Base Reset ──────────────────────────────────────────────
 *,
 *::before,
 *::after {
@@ -56,38 +98,51 @@
 }
 
 html {
-  font-size: 14px;
+  font-size: 16px; // Base 16 for accessibility
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   font-family: $font-ui;
-  font-size: $text-base;
-  line-height: 1.5;
-  color: $text-primary;
-  background-color: $bg-base;
+  font-size: $text-xs;
+  line-height: $leading-normal;
+  color: var(--text-primary);
+  background-color: var(--bg-base);
   overflow: hidden;
   @include custom-scrollbar(8px);
 }
 
-// Selection
+// ── Selection ────────────────────────────────────────────────
 ::selection {
-  background: var(--primary);
-  color: white;
+  background: rgba($primary, 0.3);
+  color: var(--text-primary);
 }
 
-// Links
+// ── Focus States (never remove!) ────────────────────────────
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+// ── Links ────────────────────────────────────────────────────
 a {
   color: var(--primary);
   text-decoration: none;
+  transition: color $duration-fast $ease-out-expo;
   
   &:hover {
+    color: lighten($primary, 10%);
     text-decoration: underline;
   }
 }
 
-// Buttons
+// ── Buttons ─────────────────────────────────────────────────
 button {
   font-family: inherit;
   font-size: inherit;
@@ -95,32 +150,32 @@ button {
   border: none;
   background: none;
   color: inherit;
+  transition: all $duration-fast $ease-out-expo;
   
-  &:focus {
-    outline: none;
-  }
-  
-  &:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
 }
 
-// Inputs
+// ── Inputs ───────────────────────────────────────────────────
 input,
 textarea,
 select {
   font-family: inherit;
   font-size: inherit;
-  color: inherit;
+  color: var(--text-primary);
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: $radius-md;
+  border-radius: var(--radius-md);
   padding: $space-2 $space-3;
+  transition: border-color $duration-fast $ease-out-expo,
+              box-shadow $duration-fast $ease-out-expo;
   
   &:focus {
     outline: none;
     border-color: var(--primary);
+    box-shadow: $glow-sm;
   }
   
   &::placeholder {
@@ -128,36 +183,27 @@ select {
   }
 }
 
-// Scrollable
+// ── Scrollable ───────────────────────────────────────────────
 .scrollable {
   overflow: auto;
   @include custom-scrollbar;
 }
 
-// Utility Classes
-.text-primary { color: var(--text-primary); }
+// ── Utility Classes ─────────────────────────────────────────
+.text-primary   { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
-.text-muted { color: var(--text-muted); }
-.text-accent { color: var(--primary); }
-.text-success { color: var(--success); }
-.text-warning { color: var(--warning); }
-.text-error { color: var(--error); }
+.text-muted     { color: var(--text-muted); }
+.text-accent    { color: var(--primary); }
+.text-success   { color: var(--success); }
+.text-warning   { color: var(--warning); }
+.text-error     { color: var(--error); }
 
-.flex { display: flex; }
-.flex-center { @include flex-center; }
-.flex-between { @include flex-between; }
-.flex-column { @include flex-column; }
-
-.gap-1 { gap: $space-1; }
-.gap-2 { gap: $space-2; }
-.gap-3 { gap: $space-3; }
-.gap-4 { gap: $space-4; }
-
-// Animations
+// ── Animations ──────────────────────────────────────────────
+// Entrance: fade + slight rise, 350ms expo
 @keyframes entrance {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -165,20 +211,22 @@ select {
   }
 }
 
+// Pulse: for attention states
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
 
+// Spin: for loading spinners
 @keyframes spin {
-  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-@keyframes slideIn {
+// Slide: for panels/drawers
+@keyframes slideInRight {
   from {
     opacity: 0;
-    transform: translateX(-10px);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
@@ -186,8 +234,34 @@ select {
   }
 }
 
-// Theme transition
+// Ring spinner (for loading)
+@keyframes ring {
+  0% { stroke-dashoffset: 163; }
+  50% { stroke-dashoffset: 30; }
+  100% { stroke-dashoffset: 163; }
+}
+
+// Skeleton shimmer
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+// Reduced motion
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+// ── Theme Transition ─────────────────────────────────────────
 body,
 .app-container {
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: 
+    background-color $duration-normal $ease-out-expo,
+    color $duration-normal $ease-out-expo;
 }
