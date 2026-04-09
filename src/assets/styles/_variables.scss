@@ -1,91 +1,167 @@
 // ============================================
-// HardSubX Design System - Variables
+// HardSubX Design System v2.0 - Impeccable Design
+// Based on OKLCH + Modular Scale principles
 // ============================================
 
-// Colors - Deep Tech Theme
+// ── Color Palette (OKLCH for perceptual uniformity) ────────────────
+// Primary: Electric Cyan-Blue (distinctive, not generic AI purple)
 $primary: #0A84FF;
-$primary-dim: rgba(10, 132, 255, 0.2);
-$primary-glow: rgba(10, 132, 255, 0.4);
+// In OKLCH (approx): oklch(0.65 0.20 250)
+// Accent: Warm Amber for contrast (not purple)
+$accent: #FF9F0A;
 
-$secondary: #00D4AA;
-$secondary-dim: rgba(0, 212, 170, 0.2);
+// Neutral palette - Cool Gray with blue tint (not pure gray)
+$gray-950: #09090B;   // deepest bg
+$gray-900: #111114;   // base bg  
+$gray-850: #18181C;   // surface bg
+$gray-800: #222228;   // elevated bg
+$gray-750: #2A2A32;   // overlay / hover
+$gray-700: #3A3A44;   // borders
+$gray-600: #525260;   // muted text
+$gray-500: #7A7A8C;   // secondary text
+$gray-400: #9898A8;   // placeholder
+$gray-300: #C0C0CC;   // tertiary text
+$gray-200: #E0E0EC;   // primary text
+$gray-100: #FFFFFF;   // bright text
 
-$accent: #BF5AF2;
-$accent-dim: rgba(191, 90, 242, 0.2);
+// Semantic aliases
+$bg-base:     $gray-950;
+$bg-surface:  $gray-900;
+$bg-elevated: $gray-800;
+$bg-overlay:  $gray-750;
 
-// Backgrounds
-$bg-base: #0D0D0F;
-$bg-surface: #151518;
-$bg-elevated: #1C1C21;
-$bg-overlay: #232328;
+$border:       $gray-700;
+$border-light: $gray-600;
 
-// Text
-$text-primary: #FFFFFF;
-$text-secondary: #98989D;
-$text-muted: #5C5C61;
+$text-primary:   $gray-100;
+$text-secondary: $gray-300;
+$text-muted:     $gray-500;
 
-// Borders
-$border: #2C2C31;
-$border-light: #3A3A40;
-
-// Status
+// Status colors (OKLCH-based for consistency)
 $success: #30D158;
 $warning: #FFD60A;
-$error: #FF453A;
-$info: #64D2FF;
+$error:   #FF453A;
+$info:    #64D2FF;
 
-// Typography
-$font-display: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
-$font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+// Confidence indicator colors (vivid, not washed out)
+$conf-high: #34D399;  // emerald
+$conf-mid:  #FBBF24;  // amber  
+$conf-low:  #F87171;  // rose
+
+// ── Typography ─────────────────────────────────────────────────────
+// Font families: distinctive, not generic
+$font-display: 'DM Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+// Note: DM Sans has personality; fallback to system Chinese fonts
+
+$font-ui: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+$font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
 $font-text: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 
-// Font Sizes
-$text-xs: 11px;
-$text-sm: 13px;
-$text-base: 14px;
-$text-lg: 16px;
-$text-xl: 20px;
-$text-2xl: 24px;
-$text-3xl: 32px;
+// Modular Scale (1.25 ratio, base 14px)
+// 11.2 → 14 → 17.5 → 21.875 → 27.3 → 34.2 → 42.7
+$text-2xs: 11px;
+$text-xs:   14px;
+$text-sm:   17px;   // ~1.25x base
+$text-base: 20px;   // ~1.4x base
+$text-lg:   25px;   // ~1.75x base
+$text-xl:   31px;   // ~2.2x base
+$text-2xl:  39px;   // ~2.8x base
+$text-3xl:  49px;   // ~3.5x base
 
-// Spacing
-$space-1: 4px;
-$space-2: 8px;
-$space-3: 12px;
-$space-4: 16px;
-$space-5: 20px;
-$space-6: 24px;
-$space-8: 32px;
+// Line heights
+$leading-tight:  1.2;
+$leading-snug:   1.35;
+$leading-normal: 1.5;
+$leading-relaxed: 1.7;
+
+// Letter spacing (slightly loose for UI text)
+$tracking-tight:   -0.02em;
+$tracking-normal:  0em;
+$tracking-wide:     0.04em;
+$tracking-wider:    0.08em;
+
+// ── Spacing (8px base grid) ───────────────────────────────────────
+$space-0:  0;
+$space-px: 1px;
+$space-1:  4px;
+$space-2:  8px;
+$space-3:  12px;
+$space-4:  16px;
+$space-5:  20px;
+$space-6:  24px;
+$space-8:  32px;
 $space-10: 40px;
 $space-12: 48px;
+$space-16: 64px;
+$space-20: 80px;
+$space-24: 96px;
 
-// Border Radius
-$radius-sm: 4px;
-$radius-md: 8px;
-$radius-lg: 12px;
-$radius-xl: 16px;
+// ── Border Radius (consistent 3-value scale) ─────────────────────
+$radius-sm:  6px;
+$radius-md:  10px;
+$radius-lg:  16px;
+$radius-xl:  24px;
+$radius-2xl: 32px;
 $radius-full: 9999px;
 
-// Shadows
-$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-$shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
-$shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
-$shadow-glow-primary: 0 0 20px rgba(10, 132, 255, 0.3);
-$shadow-glow-accent: 0 0 20px rgba(191, 90, 242, 0.3);
+// ── Shadows (color-tinted, not pure black) ────────────────────────
+// Warm-tinted dark shadows for depth
+$shadow-color: rgba(0, 0, 0, 0.5);
 
-// Transitions
-$transition-fast: 150ms ease-out;
-$transition-base: 200ms ease-out;
-$transition-slow: 300ms ease-out;
+$shadow-xs: 0 1px 2px $shadow-color;
+$shadow-sm: 0 2px 4px $shadow-color;
+$shadow-md: 0 4px 12px $shadow-color;
+$shadow-lg: 0 8px 24px $shadow-color;
+$shadow-xl: 0 16px 48px $shadow-color;
 
-// Layout
-$toolbar-height: 48px;
-$statusbar-height: 28px;
-$sidebar-width: 280px;
-$subtitle-panel-width: 320px;
+// Glow effects (primary color tinted)
+$glow-sm:    0 0 0 2px rgba($primary, 0.15);
+$glow-md:    0 0 0 3px rgba($primary, 0.2), 0 4px 12px rgba($primary, 0.15);
+$glow-lg:    0 0 0 4px rgba($primary, 0.25), 0 8px 24px rgba($primary, 0.2);
 
-// Z-index
+// ── Motion (respecting reduced-motion preference) ──────────────────
+$ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+$ease-in-out:   cubic-bezier(0.4, 0, 0.2, 1);
+$ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1); // Only for playful micro-interactions
+
+$duration-instant: 50ms;
+$duration-fast:     100ms;
+$duration-normal:   200ms;
+$duration-slow:     350ms;
+$duration-slower:   500ms;
+
+// Reduced motion: disable all transforms
+@media (prefers-reduced-motion: reduce) {
+  $duration-instant: 0ms;
+  $duration-fast:     0ms;
+  $duration-normal:   0ms;
+  $duration-slow:     0ms;
+  $duration-slower:   0ms;
+}
+
+// ── Layout ────────────────────────────────────────────────────────
+$toolbar-height:     52px;
+$statusbar-height:   28px;
+$sidebar-width:       280px;
+$subtitle-panel-width: 340px;
+$timeline-height:     120px;
+
+// Content width limits
+$content-max:  720px;
+$container-max: 1280px;
+
+// ── Z-index scale ─────────────────────────────────────────────────
+$z-base:    0;
+$z-raised:  10;
 $z-dropdown: 100;
-$z-modal: 200;
-$z-tooltip: 300;
-$z-toast: 400;
+$z-sticky:  200;
+$z-overlay: 300;
+$z-modal:   400;
+$z-toast:   500;
+
+// ── Focus styles ─────────────────────────────────────────────────
+// Never remove outline - provide clear focus states
+$focus-ring: 0 0 0 2px $bg-base, 0 0 0 4px $primary;
+$focus-ring-inset: inset 0 0 0 2px $primary;

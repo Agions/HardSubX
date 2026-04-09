@@ -21,7 +21,6 @@ const {
 } = useVideoPlayer()
 
 const videoElement = ref<HTMLVideoElement | null>(null)
-const showOverlay = ref(false)
 const isDragOver = ref(false)
 const timelineRef = ref<HTMLElement | null>(null)
 const hoverTime = ref<number | null>(null)
@@ -83,7 +82,6 @@ function handleROIUpdate(roi: { x: number; y: number; width: number; height: num
 function handleFileDrop(e: DragEvent) {
   e.preventDefault()
   isDragOver.value = false
-  showOverlay.value = false
   const file = e.dataTransfer?.files[0]
   if (file && file.type.startsWith('video/')) {
     const url = URL.createObjectURL(file)
@@ -144,6 +142,8 @@ const currentSubtitle = computed(() => {
     projectStore.currentTime >= s.startTime && projectStore.currentTime <= s.endTime
   ) ?? null
 })
+
+const hasVideo = computed(() => projectStore.hasVideo)
 </script>
 
 <template>
@@ -155,194 +155,184 @@ const currentSubtitle = computed(() => {
       @dragleave="isDragOver = false"
       @drop="handleFileDrop"
     >
-      <!-- Empty State -->
-      <div v-if="!projectStore.hasVideo" class="empty-state" :class="{ 'drag-over': isDragOver }">
-        <div class="empty-content">
-          <!-- Animated icon -->
-          <div class="empty-icon-wrapper">
-            <svg class="empty-icon-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="40" cy="40" r="38" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4" class="circle-dash"/>
-              <path d="M32 28L54 40L32 52V28Z" fill="currentColor" opacity="0.9"/>
-            </svg>
-          </div>
-          <h3 class="empty-title">导入视频开始提取</h3>
-          <p class="empty-desc">拖拽视频文件到此处，或点击下方按钮选择</p>
-          <button class="import-btn" @click="handleFileSelect">
-            <svg class="btn-icon" viewBox="0 0 20 20" fill="none">
-              <path d="M3 7v9a2 2 0 002 2h10a2 2 0 002-2V7M10 3v10m0-10L6 7m4-4l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            选择视频文件
-          </button>
-          <p class="empty-formats">支持 MP4 · MKV · AVI · MOV · WebM</p>
-        </div>
-
-        <!-- Drop Overlay -->
-        <transition name="drop-fade">
-          <div v-if="isDragOver" class="drop-overlay">
-            <div class="drop-inner">
-              <svg class="drop-icon" viewBox="0 0 48 48" fill="none">
-                <path d="M24 4v28M12 24l12 12 12-12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M4 40h40" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <!-- ── Empty State ───────────────────────────── -->
+      <Transition name="state">
+        <div v-if="!hasVideo" class="empty-state" :class="{ 'drag-over': isDragOver }">
+          <div class="empty-content">
+            <div class="empty-icon">
+              <svg viewBox="0 0 64 64" fill="none" class="empty-icon-svg">
+                <rect x="8" y="16" width="48" height="32" rx="6" stroke="currentColor" stroke-width="2"/>
+                <path d="M26 26l14 6-14 6V26z" fill="currentColor" opacity="0.8"/>
               </svg>
-              <span class="drop-text">释放以导入视频</span>
             </div>
+            <h3 class="empty-title">导入视频开始提取</h3>
+            <p class="empty-desc">拖拽视频文件到此处，或点击下方按钮选择</p>
+            <button class="import-btn" @click="handleFileSelect">
+              <svg viewBox="0 0 20 20" fill="none" class="btn-icon">
+                <path d="M3 7v9a2 2 0 002 2h10a2 2 0 002-2V7M10 3v10m0-10L6 7m4-4l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              选择视频文件
+            </button>
+            <p class="empty-formats">支持 MP4 · MKV · AVI · MOV · WebM</p>
           </div>
-        </transition>
-      </div>
 
-      <!-- Video Element -->
-      <div v-show="projectStore.hasVideo" class="video-wrapper">
-        <video
-          ref="videoElement"
-          class="video-element"
-          preload="metadata"
-          @click="togglePlay"
-        ></video>
+          <!-- Drop Overlay -->
+          <Transition name="drop">
+            <div v-if="isDragOver" class="drop-overlay">
+              <div class="drop-inner">
+                <svg viewBox="0 0 48 48" fill="none" class="drop-icon">
+                  <path d="M24 8v24M14 22l10 10 10-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M8 36h32" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+                <span class="drop-text">释放以导入视频</span>
+              </div>
+            </div>
+          </Transition>
+        </div>
+      </Transition>
 
-        <!-- Subtitle Overlay -->
-        <transition name="subtitle-fade">
-          <div v-if="currentSubtitle" class="subtitle-overlay">
-            <div class="subtitle-text">{{ currentSubtitle.text }}</div>
-          </div>
-        </transition>
+      <!-- ── Video Element ────────────────────────── -->
+      <Transition name="state">
+        <div v-if="hasVideo" class="video-wrapper">
+          <video
+            ref="videoElement"
+            class="video-element"
+            preload="metadata"
+            @click="togglePlay"
+          />
 
-        <!-- ROI Selector -->
-        <ROISelector
-          v-if="isReady"
-          :video-width="projectStore.videoMeta?.width ?? 1920"
-          :video-height="projectStore.videoMeta?.height ?? 1080"
-          @update="handleROIUpdate"
-        />
-      </div>
+          <!-- Subtitle Overlay -->
+          <Transition name="subtitle">
+            <div v-if="currentSubtitle" class="subtitle-overlay">
+              <div class="subtitle-text">{{ currentSubtitle.text }}</div>
+            </div>
+          </Transition>
 
-      <!-- Loading -->
-      <transition name="fade">
+          <!-- ROI Selector -->
+          <ROISelector
+            v-if="isReady"
+            :video-width="projectStore.videoMeta?.width ?? 1920"
+            :video-height="projectStore.videoMeta?.height ?? 1080"
+            @update="handleROIUpdate"
+          />
+        </div>
+      </Transition>
+
+      <!-- ── Loading State ─────────────────────────── -->
+      <Transition name="fade">
         <div v-if="isLoading" class="loading-overlay">
           <div class="loading-ring">
             <svg viewBox="0 0 60 60" class="ring-svg">
-              <circle cx="30" cy="30" r="26" class="ring-track"/>
-              <circle cx="30" cy="30" r="26" class="ring-progress"/>
+              <circle cx="30" cy="30" r="24" class="ring-track"/>
+              <circle cx="30" cy="30" r="24" class="ring-progress"/>
             </svg>
-            <span class="loading-percent">87%</span>
           </div>
           <span class="loading-text">正在分析视频...</span>
         </div>
-      </transition>
+      </Transition>
 
-      <!-- Error -->
-      <div v-if="error" class="error-overlay">
-        <svg class="error-icon" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M12 7v5M12 15.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        <span class="error-text">{{ error }}</span>
-      </div>
+      <!-- ── Error State ───────────────────────────── -->
+      <Transition name="fade">
+        <div v-if="error" class="error-state">
+          <svg viewBox="0 0 24 24" fill="none" class="error-icon">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M12 7v5M12 15.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span class="error-text">{{ error }}</span>
+        </div>
+      </Transition>
     </div>
 
-    <!-- Controls -->
+    <!-- ── Controls ───────────────────────────────── -->
     <div class="video-controls">
-      <div class="control-left">
-        <!-- Play/Pause -->
-        <button
-          class="ctrl-btn ctrl-btn--primary"
-          @click="togglePlay"
-          :disabled="!projectStore.hasVideo"
-          :title="projectStore.isPlaying ? '暂停' : '播放'"
-        >
-          <svg v-if="projectStore.isPlaying" class="ctrl-icon" viewBox="0 0 24 24" fill="none">
-            <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
-            <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>
-          </svg>
-          <svg v-else class="ctrl-icon" viewBox="0 0 24 24" fill="none">
-            <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
-          </svg>
-        </button>
+      <!-- Play/Pause -->
+      <button
+        class="ctrl-btn ctrl-play"
+        @click="togglePlay"
+        :disabled="!hasVideo"
+        :title="projectStore.isPlaying ? '暂停' : '播放'"
+      >
+        <svg v-if="projectStore.isPlaying" viewBox="0 0 24 24" fill="none" class="ctrl-icon">
+          <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+          <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" class="ctrl-icon">
+          <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
+        </svg>
+      </button>
 
-        <!-- Skip back 10s -->
-        <button class="ctrl-btn" @click="seekRelative(-10)" :disabled="!projectStore.hasVideo" title="后退10秒">
-          <svg class="ctrl-icon" viewBox="0 0 24 24" fill="none">
-            <path d="M12.5 8l-4 4 4 4M8 12h7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+      <!-- Skip -->
+      <button class="ctrl-btn" @click="seekRelative(-10)" :disabled="!hasVideo" title="后退10秒">
+        <svg viewBox="0 0 24 24" fill="none" class="ctrl-icon">
+          <path d="M12.5 8l-4 4 4 4M8 12h7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
 
-        <!-- Skip forward 10s -->
-        <button class="ctrl-btn" @click="seekRelative(10)" :disabled="!projectStore.hasVideo" title="前进10秒">
-          <svg class="ctrl-icon" viewBox="0 0 24 24" fill="none">
-            <path d="M11.5 8l4 4-4 4M16 12H8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
+      <button class="ctrl-btn" @click="seekRelative(10)" :disabled="!hasVideo" title="前进10秒">
+        <svg viewBox="0 0 24 24" fill="none" class="ctrl-icon">
+          <path d="M11.5 8l4 4-4 4M16 12H8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
 
-      <div class="control-center">
-        <!-- Timeline -->
+      <!-- Timeline -->
+      <div
+        class="timeline"
+        ref="timelineRef"
+        @click="handleProgressClick"
+        @mousemove="handleTimelineHover"
+        @mouseleave="handleTimelineLeave"
+      >
+        <!-- Hover bubble -->
         <div
-          class="timeline"
-          ref="timelineRef"
-          @click="handleProgressClick"
-          @mousemove="handleTimelineHover"
-          @mouseleave="handleTimelineLeave"
+          v-if="hoverTime !== null && hasVideo"
+          class="timeline-bubble"
+          :style="{ left: `${hoverX}px` }"
         >
-          <!-- Hover preview bubble -->
+          {{ formatTimePrecise(hoverTime) }}
+        </div>
+
+        <!-- Subtitle markers -->
+        <div class="timeline-markers">
           <div
-            v-if="hoverTime !== null && projectStore.hasVideo"
-            class="timeline-hover-bubble"
-            :style="{ left: `${hoverX}px` }"
-          >
-            {{ formatTimePrecise(hoverTime) }}
-          </div>
+            v-for="sub in subtitleStore.subtitles.slice(0, 50)"
+            :key="sub.id"
+            class="marker"
+            :style="{
+              left: `${(sub.startTime / projectStore.duration) * 100}%`,
+              width: `${Math.max(1, ((sub.endTime - sub.startTime) / projectStore.duration) * 100)}%`
+            }"
+            :class="{ active: sub.id === subtitleStore.selectedId }"
+          />
+        </div>
 
-          <!-- Subtitle markers -->
-          <div class="timeline-markers">
-            <div
-              v-for="sub in subtitleStore.subtitles.slice(0, 50)"
-              :key="sub.id"
-              class="timeline-marker"
-              :style="{
-                left: `${(sub.startTime / projectStore.duration) * 100}%`,
-                width: `${Math.max(1, ((sub.endTime - sub.startTime) / projectStore.duration) * 100)}%`
-              }"
-              :class="{ active: sub.id === subtitleStore.selectedId }"
-            />
-          </div>
-
-          <div class="timeline-track">
-            <!-- Subtitle region bands -->
-            <div
-              v-for="sub in subtitleStore.subtitles.slice(0, 20)"
-              :key="`band-${sub.id}`"
-              class="timeline-band"
-              :style="{
-                left: `${(sub.startTime / projectStore.duration) * 100}%`,
-                width: `${Math.max(0.5, ((sub.endTime - sub.startTime) / projectStore.duration) * 100)}%`,
-                opacity: sub.id === subtitleStore.selectedId ? 0.5 : 0.2
-              }"
-            />
-            <div
-              class="timeline-fill"
-              :style="{ width: `${projectStore.progress}%` }"
-            />
-            <div
-              class="timeline-head"
-              :style="{ left: `${projectStore.progress}%` }"
-            >
-              <div class="head-glow"/>
-            </div>
-          </div>
+        <div class="timeline-track">
+          <!-- Subtitle bands -->
+          <div
+            v-for="sub in subtitleStore.subtitles.slice(0, 20)"
+            :key="`band-${sub.id}`"
+            class="timeline-band"
+            :style="{
+              left: `${(sub.startTime / projectStore.duration) * 100}%`,
+              width: `${Math.max(0.5, ((sub.endTime - sub.startTime) / projectStore.duration) * 100)}%`,
+              opacity: sub.id === subtitleStore.selectedId ? 0.4 : 0.15
+            }"
+          />
+          <div class="timeline-fill" :style="{ width: `${projectStore.progress}%` }"/>
+          <div class="timeline-head" :style="{ left: `${projectStore.progress}%` }"/>
         </div>
       </div>
 
-      <div class="control-right">
-        <!-- Frame counter -->
-        <div class="frame-counter" v-if="projectStore.hasVideo">
-          <span class="frame-label">F</span>
-          <span class="frame-num">{{ projectStore.currentFrame.toLocaleString() }}</span>
-        </div>
-        <!-- Time display -->
-        <div class="time-display">
-          <span class="current">{{ formatTime(projectStore.currentTime) }}</span>
-          <span class="separator">/</span>
-          <span class="total">{{ formatTime(projectStore.duration) }}</span>
-        </div>
+      <!-- Time display -->
+      <div class="time-display">
+        <span class="time-current">{{ formatTime(projectStore.currentTime) }}</span>
+        <span class="time-sep">/</span>
+        <span class="time-total">{{ formatTime(projectStore.duration) }}</span>
+      </div>
+
+      <!-- Frame counter -->
+      <div class="frame-counter" v-if="hasVideo">
+        <span class="frame-label">F</span>
+        <span class="frame-num">{{ projectStore.currentFrame.toLocaleString() }}</span>
       </div>
     </div>
   </main>
@@ -353,7 +343,7 @@ const currentSubtitle = computed(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: $bg-base;
+  background: var(--bg-base);
   overflow: hidden;
 }
 
@@ -363,110 +353,93 @@ const currentSubtitle = computed(() => {
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: $space-4;
+  padding: $space-6;
 }
 
-// ── Empty State ─────────────────────────────────────────────
+// ── Empty State ───────────────────────────────────────────────
 .empty-state {
   width: 100%;
   height: 100%;
-  border: 1.5px dashed $border;
-  border-radius: $radius-xl;
-  background: linear-gradient(135deg, rgba($primary, 0.02), rgba($accent, 0.02));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(
+    135deg,
+    rgba($primary, 0.02) 0%,
+    rgba($accent, 0.02) 100%
+  );
   position: relative;
-  transition: all $transition-base;
-  animation: border-breathe 3s ease-in-out infinite;
+  transition: border-color $duration-normal $ease-out-expo,
+              background $duration-normal $ease-out-expo;
 
   &.drag-over {
-    border-color: $primary;
-    background: rgba($primary, 0.05);
-    animation: none;
-    transform: scale(1.005);
+    border-color: var(--primary);
+    border-style: solid;
+    background: rgba($primary, 0.04);
   }
 }
 
 .empty-content {
   text-align: center;
-  max-width: 340px;
-  animation: fade-up 0.5s ease-out both;
+  max-width: 320px;
+  @include entrance;
 }
 
-.empty-icon-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-bottom: $space-5;
+.empty-icon {
+  margin-bottom: $space-6;
 }
 
 .empty-icon-svg {
-  width: 80px;
-  height: 80px;
-  color: $text-muted;
-  .circle-dash {
-    animation: spin-slow 20s linear infinite;
-    transform-origin: center;
-  }
+  width: 64px;
+  height: 64px;
+  color: $gray-500;
+  margin: 0 auto;
 }
 
 .empty-title {
-  font-size: $text-xl;
+  font-size: $text-base;
   font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: $tracking-tight;
   margin-bottom: $space-2;
-  color: $text-primary;
-  letter-spacing: -0.01em;
 }
 
 .empty-desc {
-  font-size: $text-sm;
-  color: $text-muted;
+  font-size: $text-xs;
+  color: $gray-500;
   margin-bottom: $space-6;
-  line-height: 1.6;
+  line-height: $leading-relaxed;
 }
 
 .import-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: $space-2;
-  padding: 12px $space-6;
-  background: linear-gradient(135deg, $primary, lighten($primary, 10%));
-  color: #fff;
-  font-weight: 600;
-  font-size: $text-base;
-  border-radius: $radius-lg;
-  transition: all $transition-base;
-  box-shadow: 0 4px 16px rgba($primary, 0.35);
+  @include btn-primary;
+  padding: $space-3 $space-6;
   margin-bottom: $space-4;
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba($primary, 0.45);
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.98);
-  }
-
   .btn-icon {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 }
 
 .empty-formats {
-  font-size: $text-xs;
-  color: $text-muted;
-  letter-spacing: 0.02em;
+  font-size: $text-2xs;
+  color: $gray-600;
+  letter-spacing: $tracking-wide;
 }
 
-// ── Drop Overlay ────────────────────────────────────────────
+// ── Drop Overlay ──────────────────────────────────────────────
 .drop-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba($primary, 0.08);
-  border-radius: $radius-xl;
-  border: 2px solid $primary;
+  background: rgba($primary, 0.06);
+  border-radius: var(--radius-xl);
+  border: 2px solid var(--primary);
   backdrop-filter: blur(4px);
 }
 
@@ -480,17 +453,16 @@ const currentSubtitle = computed(() => {
 .drop-icon {
   width: 48px;
   height: 48px;
-  color: $primary;
-  animation: bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--primary);
 }
 
 .drop-text {
-  font-size: $text-lg;
+  font-size: $text-sm;
   font-weight: 600;
-  color: $primary;
+  color: var(--primary);
 }
 
-// ── Video Wrapper ────────────────────────────────────────────
+// ── Video Wrapper ─────────────────────────────────────────────
 .video-wrapper {
   position: relative;
   width: 100%;
@@ -498,41 +470,41 @@ const currentSubtitle = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: $radius-lg;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .video-element {
   max-width: 100%;
   max-height: 100%;
-  border-radius: $radius-md;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
-// ── Subtitle Overlay ─────────────────────────────────────────
+// ── Subtitle Overlay ──────────────────────────────────────────
 .subtitle-overlay {
   position: absolute;
   bottom: $space-6;
   left: 50%;
   transform: translateX(-50%);
   pointer-events: none;
-  z-index: 10;
+  z-index: $z-raised;
 }
 
 .subtitle-text {
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(8px);
-  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  color: white;
   padding: $space-2 $space-5;
-  border-radius: $radius-md;
-  font-size: $text-base;
-  font-weight: 500;
+  border-radius: var(--radius-md);
+  font-size: $text-xs;
+  font-weight: 600;
   white-space: nowrap;
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: $shadow-lg;
 }
 
-// ── Loading ─────────────────────────────────────────────────
+// ── Loading ───────────────────────────────────────────────────
 .loading-overlay {
   position: absolute;
   inset: 0;
@@ -541,59 +513,47 @@ const currentSubtitle = computed(() => {
   align-items: center;
   justify-content: center;
   gap: $space-4;
-  background: rgba($bg-base, 0.85);
+  background: rgba($gray-950, 0.9);
   backdrop-filter: blur(8px);
 }
 
 .loading-ring {
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
+}
 
-  .ring-svg {
-    width: 72px;
-    height: 72px;
-    transform: rotate(-90deg);
-  }
+.ring-svg {
+  width: 56px;
+  height: 56px;
+  transform: rotate(-90deg);
+}
 
-  .ring-track {
-    fill: none;
-    stroke: $border;
-    stroke-width: 4;
-  }
+.ring-track {
+  fill: none;
+  stroke: $gray-700;
+  stroke-width: 4;
+}
 
-  .ring-progress {
-    fill: none;
-    stroke: $primary;
-    stroke-width: 4;
-    stroke-linecap: round;
-    stroke-dasharray: 163;
-    stroke-dashoffset: 40;
-    animation: ring-spin 1.5s ease-in-out infinite;
-    filter: drop-shadow(0 0 6px rgba($primary, 0.5));
-  }
-
-  .loading-percent {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: $font-display;
-    font-size: $text-sm;
-    font-weight: 700;
-    color: $primary;
-  }
+.ring-progress {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 150;
+  stroke-dashoffset: 40;
+  animation: ring 1.5s $ease-out-expo infinite;
+  filter: drop-shadow(0 0 6px rgba($primary, 0.5));
 }
 
 .loading-text {
-  font-size: $text-sm;
-  color: $text-muted;
-  letter-spacing: 0.05em;
+  font-size: $text-xs;
+  color: $gray-400;
+  letter-spacing: $tracking-wide;
 }
 
-// ── Error ────────────────────────────────────────────────────
-.error-overlay {
+// ── Error State ───────────────────────────────────────────────
+.error-state {
   position: absolute;
   inset: 0;
   display: flex;
@@ -601,115 +561,100 @@ const currentSubtitle = computed(() => {
   align-items: center;
   justify-content: center;
   gap: $space-3;
-  background: rgba($bg-base, 0.9);
-
-  .error-icon {
-    width: 48px;
-    height: 48px;
-    color: $error;
-    opacity: 0.8;
-  }
-
-  .error-text {
-    font-size: $text-sm;
-    color: $error;
-    font-weight: 500;
-  }
+  background: rgba($gray-950, 0.92);
 }
 
-// ── Controls ─────────────────────────────────────────────────
+.error-icon {
+  width: 48px;
+  height: 48px;
+  color: $error;
+}
+
+.error-text {
+  font-size: $text-xs;
+  color: $error;
+  font-weight: 500;
+}
+
+// ── Controls ──────────────────────────────────────────────────
 .video-controls {
-  height: 60px;
-  background: $bg-surface;
-  border-top: 1px solid $border;
+  height: 56px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   padding: 0 $space-4;
-  gap: $space-4;
-}
-
-.control-left {
-  display: flex;
-  align-items: center;
-  gap: $space-2;
-  flex-shrink: 0;
+  gap: $space-3;
 }
 
 .ctrl-btn {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: $radius-md;
-  color: $text-secondary;
-  transition: all $transition-fast;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   flex-shrink: 0;
+  @include pressable;
+  @include focus-ring;
 
   &:hover:not(:disabled) {
-    background: $bg-overlay;
-    color: $text-primary;
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.92);
+    background: var(--bg-overlay);
+    color: var(--text-primary);
   }
 
   &:disabled {
     opacity: 0.25;
-    cursor: not-allowed;
-  }
-
-  &--primary {
-    background: $primary;
-    color: #fff;
-    width: 42px;
-    height: 42px;
-    border-radius: $radius-lg;
-    box-shadow: 0 2px 12px rgba($primary, 0.4);
-
-    &:hover:not(:disabled) {
-      background: lighten($primary, 5%);
-      box-shadow: 0 4px 20px rgba($primary, 0.5);
-    }
-  }
-
-  .ctrl-icon {
-    width: 20px;
-    height: 20px;
   }
 }
 
-.control-center {
-  flex: 1;
-  padding: 0 $space-2;
+.ctrl-play {
+  background: var(--primary);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 8px rgba($primary, 0.35);
+
+  &:hover:not(:disabled) {
+    background: lighten($primary, 8%);
+    box-shadow: 0 4px 16px rgba($primary, 0.45);
+    color: white;
+  }
 }
 
+.ctrl-icon {
+  width: 18px;
+  height: 18px;
+}
+
+// ── Timeline ──────────────────────────────────────────────────
 .timeline {
+  flex: 1;
   position: relative;
   height: 40px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  padding: 6px 0;
 }
 
-.timeline-hover-bubble {
+.timeline-bubble {
   position: absolute;
-  top: -32px;
+  top: -28px;
   transform: translateX(-50%);
-  background: $bg-elevated;
-  color: $text-primary;
-  font-family: $font-display;
-  font-size: $text-xs;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: $font-mono;
+  font-size: $text-2xs;
   font-weight: 600;
   padding: 3px 8px;
-  border-radius: $radius-sm;
-  border: 1px solid $border-light;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
   white-space: nowrap;
   pointer-events: none;
-  z-index: 5;
-  box-shadow: $shadow-md;
+  z-index: $z-raised;
+  box-shadow: $shadow-sm;
 }
 
 .timeline-markers {
@@ -721,28 +666,26 @@ const currentSubtitle = computed(() => {
   pointer-events: none;
 }
 
-.timeline-marker {
+.marker {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  height: 4px;
-  background: rgba($secondary, 0.6);
+  height: 3px;
+  background: rgba($conf-mid, 0.5);
   border-radius: $radius-full;
-  transition: all $transition-fast;
 
   &.active {
-    background: $secondary;
-    box-shadow: 0 0 6px rgba($secondary, 0.5);
+    background: $conf-mid;
+    box-shadow: 0 0 6px rgba($conf-mid, 0.4);
   }
 }
 
 .timeline-track {
   position: relative;
   width: 100%;
-  height: 6px;
-  background: $bg-overlay;
+  height: 5px;
+  background: var(--bg-overlay);
   border-radius: $radius-full;
-  overflow: visible;
 }
 
 .timeline-band {
@@ -751,7 +694,7 @@ const currentSubtitle = computed(() => {
   height: 100%;
   background: $accent;
   border-radius: 2px;
-  transition: opacity $transition-fast;
+  transition: opacity $duration-fast $ease-out-expo;
 }
 
 .timeline-fill {
@@ -759,143 +702,128 @@ const currentSubtitle = computed(() => {
   top: 0;
   left: 0;
   height: 100%;
-  background: linear-gradient(90deg, $primary, $accent);
+  background: var(--primary);
   border-radius: $radius-full;
-  transition: width 0.05s linear;
+  transition: width 50ms linear;
 }
 
 .timeline-head {
   position: absolute;
   top: 50%;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   transform: translate(-50%, -50%);
-  transition: left 0.05s linear;
+  transition: left 50ms linear;
 
   &::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: #fff;
+    background: white;
     border-radius: 50%;
-    box-shadow: $shadow-md;
-    transition: transform $transition-fast;
-  }
-
-  .head-glow {
-    position: absolute;
-    inset: -4px;
-    background: rgba($primary, 0.3);
-    border-radius: 50%;
-    animation: pulse-glow 2s ease-in-out infinite;
+    box-shadow: $shadow-sm;
+    transition: transform $duration-fast $ease-out-expo;
   }
 }
 
 .timeline:hover .timeline-head::before {
-  transform: scale(1.3);
+  transform: scale(1.25);
 }
 
-.control-right {
+// ── Time Display ──────────────────────────────────────────────
+.time-display {
+  font-family: $font-mono;
+  font-size: $text-xs;
   display: flex;
-  align-items: center;
-  gap: $space-3;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.time-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.time-sep {
+  color: $gray-600;
+}
+
+.time-total {
+  color: $gray-500;
 }
 
 .frame-counter {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-family: $font-display;
-  font-size: $text-xs;
-
-  .frame-label {
-    color: $text-muted;
-    font-weight: 500;
-  }
-
-  .frame-num {
-    color: $text-secondary;
-    min-width: 48px;
-    text-align: right;
-  }
+  font-family: $font-mono;
+  font-size: $text-2xs;
+  flex-shrink: 0;
 }
 
-.time-display {
-  font-family: $font-display;
-  font-size: $text-sm;
-  display: flex;
-  gap: 3px;
-
-  .current {
-    color: $text-primary;
-    font-weight: 600;
-  }
-
-  .separator {
-    color: $text-muted;
-  }
-
-  .total {
-    color: $text-muted;
-  }
+.frame-label {
+  color: $gray-600;
+  font-weight: 600;
 }
 
-// ── Transitions ─────────────────────────────────────────────
-.drop-fade-enter-active,
-.drop-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+.frame-num {
+  color: $gray-400;
+  min-width: 48px;
+  text-align: right;
 }
-.drop-fade-enter-from,
-.drop-fade-leave-to {
+
+// ── Transitions ───────────────────────────────────────────────
+.state-enter-active {
+  transition: opacity $duration-slow $ease-out-expo,
+              transform $duration-slow $ease-out-expo;
+}
+.state-leave-active {
+  transition: opacity $duration-normal $ease-out-expo;
+}
+.state-enter-from {
+  opacity: 0;
+  transform: scale(0.98);
+}
+.state-leave-to {
+  opacity: 0;
+}
+
+.drop-enter-active {
+  transition: opacity $duration-normal $ease-out-expo,
+              transform $duration-normal $ease-out-expo;
+}
+.drop-leave-active {
+  transition: opacity $duration-fast $ease-out-expo;
+}
+.drop-enter-from {
   opacity: 0;
   transform: scale(0.96);
 }
-
-.subtitle-fade-enter-active,
-.subtitle-fade-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.subtitle-fade-enter-from,
-.subtitle-fade-leave-to {
+.drop-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(8px);
+}
+
+.subtitle-enter-active {
+  transition: opacity $duration-normal $ease-out-expo,
+              transform $duration-normal $ease-out-expo;
+}
+.subtitle-leave-active {
+  transition: opacity $duration-fast $ease-out-expo;
+}
+.subtitle-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(6px);
+}
+.subtitle-leave-to {
+  opacity: 0;
 }
 
 .fade-enter-active,
-.fade-leave-active { transition: opacity 0.3s ease; }
+.fade-leave-active {
+  transition: opacity $duration-normal $ease-out-expo;
+}
 .fade-enter-from,
-.fade-leave-to { opacity: 0; }
-
-// ── Animations ──────────────────────────────────────────────
-@keyframes border-breathe {
-  0%, 100% { border-color: $border; }
-  50% { border-color: $border-light; }
-}
-
-@keyframes spin-slow {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes ring-spin {
-  0% { stroke-dashoffset: 163; }
-  50% { stroke-dashoffset: 30; }
-  100% { stroke-dashoffset: 163; }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.2); }
-}
-
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes bounce-in {
-  0% { transform: scale(0.5); opacity: 0; }
-  70% { transform: scale(1.1); }
-  100% { transform: scale(1); opacity: 1; }
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
