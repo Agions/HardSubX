@@ -2,16 +2,8 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// RAII guard: automatically removes temp file when dropped
-struct TempFileGuard(PathBuf);
-
-impl Drop for TempFileGuard {
-    fn drop(&mut self) {
-        if let Err(e) = std::fs::remove_file(&self.0) {
-            tracing::warn!("Failed to remove temp file {:?}: {}", self.0, e);
-        }
-    }
-}
+use super::types::{BoundingBox, ROI};
+use super::utils::{uuid_v4, TempFileGuard};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoMetadata {
@@ -34,52 +26,9 @@ pub struct Frame {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ROI {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub roi_type: String,
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-    pub enabled: bool,
-    #[serde(default = "default_unit")]
-    pub unit: String,
-}
-
-fn default_unit() -> String {
-    "percent".to_string()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractOptions {
     pub scene_threshold: f32,
     pub frame_interval: u32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BoundingBox {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl Default for ROI {
-    fn default() -> Self {
-        Self {
-            id: "default".to_string(),
-            name: "Default".to_string(),
-            roi_type: "bottom".to_string(),
-            x: 0,
-            y: 0,
-            width: 1920,
-            height: 100,
-            enabled: true,
-            unit: "percent".to_string(),
-        }
-    }
 }
 
 #[tauri::command]
@@ -550,11 +499,6 @@ fn extract_frame_at_time_impl(
     let base64_str = base64::engine::general_purpose::STANDARD.encode(&img_data);
 
     Ok(format!("data:image/png;base64,{}", base64_str))
-}
-
-/// Generate a proper UUID v4 using the uuid crate
-fn uuid_v4() -> String {
-    uuid::Uuid::new_v4().to_string()
 }
 
 // NOTE: detect_scenes is intentionally NOT a #[tauri::command] here to avoid
