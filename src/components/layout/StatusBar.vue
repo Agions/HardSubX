@@ -149,12 +149,11 @@ const statusText = computed(() => {
   height: 6px;
   background: var(--primary);
   border-radius: 50%;
-  animation: statusPulse 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation: statusPulse 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 @keyframes statusPulse {
-  0%   { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(#0A84FF, 0.5); }
-  60%  { opacity: 0.8; transform: scale(0.9); box-shadow: 0 0 0 4px rgba(#0A84FF, 0); }
-  100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(#0A84FF, 0); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

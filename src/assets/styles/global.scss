@@ -137,7 +137,7 @@ a {
   transition: color $duration-fast $ease-out-expo;
   
   &:hover {
-    color: lighten($primary, 10%);
+    color: color-mix(in oklch, var(--primary) 85%, white);
     text-decoration: underline;
   }
 }
