@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use super::video::{ROI, BoundingBox};
+
+use super::types::{BoundingBox, ROI};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubtitleItem {

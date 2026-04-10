@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use super::types::BoundingBox;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OCREngineConfig {
     pub engine: String,
@@ -28,14 +30,6 @@ pub struct OCRResultItem {
     pub text: String,
     pub confidence: f32,
     pub bounding_box: BoundingBox,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BoundingBox {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
