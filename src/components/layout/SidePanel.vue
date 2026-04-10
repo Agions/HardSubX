@@ -915,8 +915,8 @@ const formatDescriptions: Record<keyof ExportFormats, string> = {
   }
 
   .ring-progress {
-    stroke: $primary;
-    filter: drop-shadow(0 0 6px rgba($primary, 0.5));
+    stroke: var(--primary);
+    filter: drop-shadow(0 0 6px color-mix(in oklch, var(--primary) 50%, transparent));
     transition: stroke-dashoffset 0.4s ease;
   }
 }
@@ -1005,13 +1005,13 @@ const formatDescriptions: Record<keyof ExportFormats, string> = {
   }
 
   &--primary {
-    background: linear-gradient(135deg, $primary, lighten($primary, 8%));
+    background: linear-gradient(135deg, var(--primary), color-mix(in oklch, var(--primary) 85%, white));
     color: #fff;
-    box-shadow: 0 4px 16px rgba($primary, 0.35);
+    box-shadow: 0 4px 16px color-mix(in oklch, var(--primary) 40%, transparent);
 
     &:hover:not(:disabled) {
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba($primary, 0.45);
+      box-shadow: 0 8px 24px color-mix(in oklch, var(--primary) 50%, transparent);
     }
 
     &:active:not(:disabled) {
@@ -1203,9 +1203,9 @@ const formatDescriptions: Record<keyof ExportFormats, string> = {
   font-weight: 800;
   letter-spacing: -0.5px;
 
-  &.avatar-paddle { background: linear-gradient(135deg, #00A0FF, #0066FF); color: #fff; }
-  &.avatar-easyocr { background: linear-gradient(135deg, #FF6B35, #FF9F1C); color: #fff; }
-  &.avatar-tesseract { background: linear-gradient(135deg, #5C5C61, #3A3A40); color: #fff; }
+  &.avatar-paddle { background: linear-gradient(135deg, oklch(0.65 0.2 250), oklch(0.55 0.22 260)); color: #fff; }
+  &.avatar-easyocr { background: linear-gradient(135deg, oklch(0.65 0.2 50), oklch(0.70 0.18 65)); color: #fff; }
+  &.avatar-tesseract { background: linear-gradient(135deg, oklch(0.45 0.02 260), oklch(0.35 0.02 260)); color: #fff; }
 }
 
 .engine-info {
@@ -1408,9 +1408,9 @@ const formatDescriptions: Record<keyof ExportFormats, string> = {
   border-radius: $radius-full;
   transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s;
 
-  &.meter-high { background: linear-gradient(90deg, $success, lighten($success, 10%)); }
-  &.meter-mid { background: linear-gradient(90deg, $warning, lighten($warning, 10%)); }
-  &.meter-low { background: linear-gradient(90deg, $error, lighten($error, 10%)); }
+  &.meter-high { background: linear-gradient(90deg, var(--success), color-mix(in oklch, var(--success) 80%, white)); }
+  &.meter-mid { background: linear-gradient(90deg, var(--warning), color-mix(in oklch, var(--warning) 80%, white)); }
+  &.meter-low { background: linear-gradient(90deg, var(--error), color-mix(in oklch, var(--error) 80%, white)); }
 }
 
 .meter-value {
@@ -1637,9 +1637,9 @@ const formatDescriptions: Record<keyof ExportFormats, string> = {
     pointer-events: none;
     transition: width 0.1s;
 
-    &.fill-green { background: linear-gradient(90deg, $success, lighten($success, 8%)); }
-    &.fill-yellow { background: linear-gradient(90deg, $warning, lighten($warning, 8%)); }
-    &.fill-red { background: linear-gradient(90deg, $error, lighten($error, 8%)); }
+    &.fill-green { background: linear-gradient(90deg, var(--success), color-mix(in oklch, var(--success) 85%, white)); }
+    &.fill-yellow { background: linear-gradient(90deg, var(--warning), color-mix(in oklch, var(--warning) 85%, white)); }
+    &.fill-red { background: linear-gradient(90deg, var(--error), color-mix(in oklch, var(--error) 85%, white)); }
   }
 
   .slider {
@@ -1782,7 +1782,7 @@ const formatDescriptions: Record<keyof ExportFormats, string> = {
 }
 
 @keyframes pulse-anim {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

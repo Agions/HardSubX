@@ -117,28 +117,28 @@ function handleClick(e: MouseEvent) {
   &.btn-primary {
     background: var(--primary);
     color: white;
-    box-shadow: 0 2px 8px rgba(#0A84FF, 0.25);
+    box-shadow: 0 2px 8px color-mix(in oklch, var(--primary) 40%, transparent);
 
     &::before {
       content: '';
       position: absolute;
       inset: 0;
-      background: rgba(255, 255, 255, 0);
+      background: color-mix(in oklch, white 0%, transparent);
       transition: background 120ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     &:hover:not(:disabled) {
       transform: translateY(-1px) scale(1.01);
-      box-shadow: 0 4px 16px rgba(#0A84FF, 0.35);
+      box-shadow: 0 4px 16px color-mix(in oklch, var(--primary) 50%, transparent);
 
       &::before {
-        background: rgba(255, 255, 255, 0.08);
+        background: color-mix(in oklch, white 10%, transparent);
       }
     }
 
     &:active:not(:disabled) {
       transform: translateY(0) scale(0.98);
-      box-shadow: 0 1px 4px rgba(#0A84FF, 0.2);
+      box-shadow: 0 1px 4px color-mix(in oklch, var(--primary) 30%, transparent);
     }
   }
 
@@ -176,13 +176,13 @@ function handleClick(e: MouseEvent) {
 
   // ── Danger — error tint ─────────────────────────────────
   &.btn-danger {
-    background: rgba(var(--error), 0.12);
+    background: color-mix(in oklch, var(--error) 12%, transparent);
     color: var(--error);
-    border: 1px solid rgba(var(--error), 0.2);
+    border: 1px solid color-mix(in oklch, var(--error) 25%, transparent);
 
     &:hover:not(:disabled) {
-      background: rgba(var(--error), 0.18);
-      border-color: rgba(var(--error), 0.35);
+      background: color-mix(in oklch, var(--error) 18%, transparent);
+      border-color: color-mix(in oklch, var(--error) 40%, transparent);
       transform: translateY(-1px);
     }
 

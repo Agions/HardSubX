@@ -182,13 +182,13 @@
 
 @mixin btn-danger {
   @include btn-base;
-  background: rgba($error, 0.12);
+  background: color-mix(in oklch, $error 12%, transparent);
   color: $error;
-  border: 1px solid rgba($error, 0.25);
+  border: 1px solid color-mix(in oklch, $error 25%, transparent);
   
   &:hover:not(:disabled) {
-    background: rgba($error, 0.2);
-    border-color: rgba($error, 0.4);
+    background: color-mix(in oklch, $error 20%, transparent);
+    border-color: color-mix(in oklch, $error 40%, transparent);
   }
 }
 
