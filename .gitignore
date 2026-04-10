@@ -44,3 +44,6 @@ coverage/
 SPEC.md
 OPTIMIZE_PLAN.md
 PADDLEOCR_SETUP.md
+
+# Development knowledge (local only, do not commit)
+.learnings/
