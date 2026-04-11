@@ -199,24 +199,32 @@ function morphologicalErode(imageData: ImageData, size: number): ImageData {
   const { data, width, height } = imageData
   const result = new ImageData(width, height)
   
+  // Precompute (dy, dx) neighbor offsets
+  const neighborDeltas: [number, number][] = []
+  for (let dy = -size; dy <= size; dy++) {
+    for (let dx = -size; dx <= size; dx++) {
+      neighborDeltas.push([dy, dx])
+    }
+  }
+  
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       let min = 255
       
-      for (let dy = -size; dy <= size; dy++) {
-        for (let dx = -size; dx <= size; dx++) {
-          const nx = x + dx
-          const ny = y + dy
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            min = Math.min(min, data[(ny * width + nx) * 4])
-          }
+      for (const [dy, dx] of neighborDeltas) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          const idx = (ny * width + nx) * 4
+          min = Math.min(min, data[idx])
         }
       }
       
-      result.data[(y * width + x) * 4] = min
-      result.data[(y * width + x) * 4 + 1] = min
-      result.data[(y * width + x) * 4 + 2] = min
-      result.data[(y * width + x) * 4 + 3] = 255
+      const ri = (y * width + x) * 4
+      result.data[ri] = min
+      result.data[ri + 1] = min
+      result.data[ri + 2] = min
+      result.data[ri + 3] = 255
     }
   }
   
@@ -227,24 +235,32 @@ function morphologicalDilate(imageData: ImageData, size: number): ImageData {
   const { data, width, height } = imageData
   const result = new ImageData(width, height)
   
+  // Precompute (dy, dx) neighbor offsets
+  const neighborDeltas: [number, number][] = []
+  for (let dy = -size; dy <= size; dy++) {
+    for (let dx = -size; dx <= size; dx++) {
+      neighborDeltas.push([dy, dx])
+    }
+  }
+  
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       let max = 0
       
-      for (let dy = -size; dy <= size; dy++) {
-        for (let dx = -size; dx <= size; dx++) {
-          const nx = x + dx
-          const ny = y + dy
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            max = Math.max(max, data[(ny * width + nx) * 4])
-          }
+      for (const [dy, dx] of neighborDeltas) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          const idx = (ny * width + nx) * 4
+          max = Math.max(max, data[idx])
         }
       }
       
-      result.data[(y * width + x) * 4] = max
-      result.data[(y * width + x) * 4 + 1] = max
-      result.data[(y * width + x) * 4 + 2] = max
-      result.data[(y * width + x) * 4 + 3] = 255
+      const ri = (y * width + x) * 4
+      result.data[ri] = max
+      result.data[ri + 1] = max
+      result.data[ri + 2] = max
+      result.data[ri + 3] = 255
     }
   }
   
@@ -258,49 +274,49 @@ function morphologicalDilate(imageData: ImageData, size: number): ImageData {
 function detectSkewAngle(imageData: ImageData): number {
   const { data, width, height } = imageData
   
-  // Convert to binary first
-  const binary: boolean[][] = []
+  // Convert to binary (flat Uint8Array instead of 2D boolean array)
+  const binary = new Uint8Array(width * height)
   for (let y = 0; y < height; y++) {
-    binary[y] = []
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4
-      binary[y][x] = data[idx] < 128 // Text is dark
+      binary[y * width + x] = data[idx] < 128 ? 1 : 0 // Text is dark
     }
   }
   
-  // Test multiple angles and find the one with best horizontal projection
+  // Precompute cos/sin for each angle (1° steps, 31 angles from -15 to 15)
+  const angleSteps = 31
+  const angleMin = -15
+  const cosTable = new Float32Array(angleSteps)
+  const sinTable = new Float32Array(angleSteps)
+  for (let i = 0; i < angleSteps; i++) {
+    const radians = (angleMin + i) * Math.PI / 180
+    cosTable[i] = Math.cos(radians)
+    sinTable[i] = Math.sin(radians)
+  }
+  
+  // Test 1° step angles and find the best
   let bestAngle = 0
   let bestScore = -Infinity
   
-  for (let angle = -15; angle <= 15; angle += 0.5) {
-    const score = evaluateProjection(binary, angle)
+  for (let i = 0; i < angleSteps; i++) {
+    const score = evaluateProjectionFast(binary, width, height, cosTable[i], sinTable[i])
     if (score > bestScore) {
       bestScore = score
-      bestAngle = angle
+      bestAngle = angleMin + i
     }
   }
   
   return bestAngle
 }
 
-function evaluateProjection(binary: boolean[][], angle: number): number {
-  // Simple projection score based on horizontal variance
-  const height = binary.length
-  const width = binary[0].length
-  
-  // Rotate points and project onto horizontal axis
-  const radians = angle * Math.PI / 180
-  const cosVal = Math.cos(radians)
-  const sinVal = Math.sin(radians)
-
-  let totalVariance = 0
+function evaluateProjectionFast(binary: Uint8Array, width: number, height: number, cosVal: number, sinVal: number): number {
   const projections: number[] = new Array(height).fill(0)
 
   for (let y = 0; y < height; y++) {
+    const rowOffset = y * width
     for (let x = 0; x < width; x++) {
-      if (binary[y][x]) {
+      if (binary[rowOffset + x]) {
         const ry = Math.round(x * sinVal + y * cosVal)
-
         if (ry >= 0 && ry < height) {
           projections[ry]++
         }
@@ -308,9 +324,9 @@ function evaluateProjection(binary: boolean[][], angle: number): number {
     }
   }
   
-  // Score is based on how concentrated the projections are
-  // Low variance = more evenly distributed = better alignment
+  // Score: lower variance = better alignment
   const mean = projections.reduce((a, b) => a + b, 0) / height
+  let totalVariance = 0
   for (const p of projections) {
     totalVariance += (p - mean) ** 2
   }
