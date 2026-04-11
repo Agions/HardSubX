@@ -81,8 +81,17 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   const canRedo = computed(() => historyIndex.value < editHistory.value.length - 1)
   
   // Actions
+  // O(1) id → index lookup map (maintained in sync with subtitles.value)
+  const _subtitleIndexMap = new Map<string, number>()
+
+  function _rebuildIndexMap() {
+    _subtitleIndexMap.clear()
+    subtitles.value.forEach((sub, i) => _subtitleIndexMap.set(sub.id, i))
+  }
+
   function setSubtitles(subs: SubtitleItem[]) {
     subtitles.value = subs
+    _rebuildIndexMap()
     editHistory.value = []
     historyIndex.value = -1
   }
@@ -100,23 +109,28 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     arr.splice(lo, 0, sub)
     // Re-index only from insertion point
     for (let i = lo; i < arr.length; i++) arr[i].index = i + 1
+    // Update map for shifted items
+    for (let i = lo + 1; i < arr.length; i++) _subtitleIndexMap.set(arr[i].id, i)
+    _subtitleIndexMap.set(sub.id, lo)
   }
   
   function updateSubtitle(id: string, updates: Partial<SubtitleItem>) {
-    const sub = subtitles.value.find(s => s.id === id)
-    if (sub) {
-      Object.assign(sub, updates)
+    const index = _subtitleIndexMap.get(id)
+    if (index !== undefined) {
+      Object.assign(subtitles.value[index], updates)
     }
   }
   
   function deleteSubtitle(id: string) {
-    const index = subtitles.value.findIndex(s => s.id === id)
-    if (index === -1) return
+    const index = _subtitleIndexMap.get(id)
+    if (index === undefined) return
     subtitles.value.splice(index, 1)
     // Re-index only from deleted position onward
     for (let i = index; i < subtitles.value.length; i++) {
       subtitles.value[i].index = i + 1
     }
+    // Rebuild map (simpler than shifting entries for potentially many items)
+    _rebuildIndexMap()
     if (selectedId.value === id) selectedId.value = null
   }
   
@@ -154,8 +168,9 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   }
 
   function editSubtitle(id: string, field: EditableField, oldValue: EditableValue, newValue: EditableValue) {
-    const sub = subtitles.value.find(s => s.id === id)
-    if (!sub) return
+    const idx = _subtitleIndexMap.get(id)
+    if (idx === undefined) return
+    const sub = subtitles.value[idx]
 
     // Record edit for undo/redo
     const edit: SubtitleEdit = { id, field, oldValue, newValue }
@@ -169,8 +184,8 @@ export const useSubtitleStore = defineStore('subtitle', () => {
   function undo() {
     if (!canUndo.value) return
     const edit = editHistory.value[historyIndex.value]
-    const sub = subtitles.value.find(s => s.id === edit.id)
-    if (sub) applyFieldEdit(sub, edit.field, edit.oldValue)
+    const idx = _subtitleIndexMap.get(edit.id)
+    if (idx !== undefined) applyFieldEdit(subtitles.value[idx], edit.field, edit.oldValue)
     historyIndex.value--
   }
 
@@ -179,8 +194,8 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     historyIndex.value++
     const edit = editHistory.value[historyIndex.value]
     if (!edit) return  // guard against out-of-bounds after last edit
-    const sub = subtitles.value.find(s => s.id === edit.id)
-    if (sub) applyFieldEdit(sub, edit.field, edit.newValue)
+    const idx = _subtitleIndexMap.get(edit.id)
+    if (idx !== undefined) applyFieldEdit(subtitles.value[idx], edit.field, edit.newValue)
   }
   
   function exportToFormat(format: ExportFormat): string {
