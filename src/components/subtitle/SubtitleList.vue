@@ -1,110 +1,38 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { watch } from 'vue'
 import { useSubtitleStore } from '@/stores/subtitle'
-import { useProjectStore } from '@/stores/project'
+import { useSubtitleList } from '@/composables/useSubtitleList'
 import type { ExportFormats } from '@/types/subtitle'
-import { getConfidenceLevel } from '@/types/video'
 
 const subtitleStore = useSubtitleStore()
-const projectStore = useProjectStore()
+const {
+  displayCount,
+  hoveredId,
+  editingId,
+  editText,
+  editStartTime,
+  editEndTime,
+  visibleSubtitles,
+  hasMore,
+  totalCount,
+  filteredCount,
+  isFiltered,
+  lowConfCount,
+  loadMore,
+  resetDisplayCount,
+  handleSubtitleClick,
+  startEdit,
+  cancelEdit,
+  saveEdit,
+  deleteSelected,
+  formatTimeShort,
+  getConfidenceLevel,
+} = useSubtitleList()
 
-const editingId = ref<string | null>(null)
-const editText = ref('')
+// Reset pagination when filter changes
+watch(() => subtitleStore.confidenceFilter, resetDisplayCount)
 
 const exportFormatKeys = Object.keys(subtitleStore.exportFormats) as (keyof ExportFormats)[]
-const editStartTime = ref('')
-const editEndTime = ref('')
-const hoveredId = ref<string | null>(null)
-const displayCount = ref(100) // Initial batch size
-const BATCH_SIZE = 50
-
-const visibleSubtitles = computed(() => {
-  return subtitleStore.filteredSubtitles.slice(0, displayCount.value)
-})
-
-const hasMore = computed(() => {
-  return displayCount.value < subtitleStore.filteredSubtitles.length
-})
-
-function loadMore() {
-  displayCount.value += BATCH_SIZE
-}
-
-function startEdit(id: string) {
-  const sub = subtitleStore.subtitles.find(s => s.id === id)
-  if (!sub) return
-  editingId.value = id
-  editText.value = sub.text
-  editStartTime.value = formatTimeSrt(sub.startTime)
-  editEndTime.value = formatTimeSrt(sub.endTime)
-}
-
-function cancelEdit() {
-  editingId.value = null
-  editText.value = ''
-  editStartTime.value = ''
-  editEndTime.value = ''
-}
-
-function saveEdit() {
-  if (!editingId.value) return
-  const sub = subtitleStore.subtitles.find(s => s.id === editingId.value)
-  if (!sub) return
-  if (editText.value !== sub.text) {
-    subtitleStore.editSubtitle(editingId.value, 'text', sub.text, editText.value)
-  }
-  const newStart = parseTime(editStartTime.value)
-  const newEnd = parseTime(editEndTime.value)
-  if (newStart !== sub.startTime && newStart >= 0) {
-    subtitleStore.editSubtitle(editingId.value, 'startTime', sub.startTime, newStart)
-  }
-  if (newEnd !== sub.endTime && newEnd >= 0) {
-    subtitleStore.editSubtitle(editingId.value, 'endTime', sub.endTime, newEnd)
-  }
-  cancelEdit()
-}
-
-function handleSubtitleClick(id: string) {
-  subtitleStore.selectSubtitle(id)
-  const sub = subtitleStore.subtitles.find(s => s.id === id)
-  if (sub && projectStore.videoMeta) {
-    projectStore.setCurrentFrame(sub.startFrame)
-  }
-}
-
-function deleteSelected() {
-  if (subtitleStore.selectedId) {
-    subtitleStore.deleteSubtitle(subtitleStore.selectedId)
-  }
-}
-
-function formatTimeSrt(seconds: number): string {
-  const hrs = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-  const ms = Math.floor((seconds % 1) * 1000)
-  const pad = (n: number, len = 2) => n.toString().padStart(len, '0')
-  return `${pad(hrs)}:${pad(mins)}:${pad(secs)},${pad(ms, 3)}`
-}
-
-function formatTimeShort(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  const ms = Math.floor((seconds % 1) * 10)
-  return `${mins}:${secs.toString().padStart(2, '0')}.${ms}`
-}
-
-function parseTime(timeStr: string): number {
-  const match = timeStr.match(/(\d+):(\d+):(\d+)[,.](\d+)/)
-  if (!match) return -1
-  const [, hrs, mins, secs, ms] = match
-  return parseInt(hrs) * 3600 + parseInt(mins) * 60 + parseInt(secs) + parseInt(ms) / 1000
-}
-
-const lowConfCount = computed(() => subtitleStore.confidenceStats.low)
-const totalCount = computed(() => subtitleStore.confidenceStats.total)
-const filteredCount = computed(() => subtitleStore.filteredSubtitles.length)
-const isFiltered = computed(() => subtitleStore.confidenceFilter !== 'all')
 </script>
 
 <template>
