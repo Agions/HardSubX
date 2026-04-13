@@ -10,6 +10,8 @@ export { useVideoMetadata } from './useVideoMetadata'
 export { useSystemCheck } from './useSystemCheck'
 export { useImagePreprocessor } from './useImagePreprocessor'
 export { useSubtitleList } from './useSubtitleList'
+export { useOCRTab } from './useOCRTab'
+export { useExportTab } from './useExportTab'
 
 // Types
 export type { KeyboardShortcut } from './useKeyboardShortcuts'
