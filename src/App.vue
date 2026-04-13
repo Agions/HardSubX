@@ -12,9 +12,30 @@ import StatusBar from '@/components/layout/StatusBar.vue'
 import KeyboardShortcutsHelp from '@/components/common/KeyboardShortcutsHelp.vue'
 import ExportDialog from '@/components/subtitle/ExportDialog.vue'
 import BatchProcessView from '@/components/layout/BatchProcessView.vue'
+import SubtitleToast from '@/components/common/SubtitleToast.vue'
+import { useSubtitleStore } from '@/stores/subtitle'
+import { watch } from 'vue'
 
 // Initialize theme
 useTheme()
+
+// Subtitle store for toast
+const subtitleStore = useSubtitleStore()
+const toastVisible = ref(false)
+const toastText = ref('')
+const toastIndex = ref(0)
+const toastTotal = ref(0)
+
+// Watch for subtitle selection changes
+watch(() => subtitleStore.selectedSubtitle, (sub) => {
+  if (sub) {
+    const idx = subtitleStore.subtitles.findIndex(s => s.id === sub.id)
+    toastText.value = sub.text
+    toastIndex.value = idx >= 0 ? idx : 0
+    toastTotal.value = subtitleStore.subtitles.length
+    toastVisible.value = true
+  }
+})
 
 // Keyboard shortcuts
 const { setupShortcuts, cleanupShortcuts, setExportCallback } = useKeyboardShortcuts()
@@ -80,6 +101,13 @@ onUnmounted(() => {
     <KeyboardShortcutsHelp ref="shortcutsHelpRef" />
     <ExportDialog ref="exportDialogRef" />
     <BatchProcessView ref="batchProcessRef" />
+    <SubtitleToast
+      :visible="toastVisible"
+      :text="toastText"
+      :index="toastIndex"
+      :total="toastTotal"
+      @hide="toastVisible = false"
+    />
   </div>
 </template>
 
