@@ -98,44 +98,31 @@ HardSubX/
 
 ## OCR Post-Processing Pipeline
 
-Every OCR result passes through a multi-stage refinement pipeline:
+Every OCR result passes through a 4-stage refinement pipeline in `src/core/SubtitlePipeline.ts`:
 
 ```
-Raw OCR Text
+Raw OCR Text (SubtitleLite[])
       |
       v
 +---------------+
-| 1. Cleanup     | trim, collapse spaces, normalize unicode
-+---------------+
-      |
-      v
-+---------------+
-| 2. Punctuation | Full-width -> half-width conversion
-|    Normalize   | Chinese/Japanese punctuation rules
+| 1. filterJitter | Remove single-frame OCR noise (< 3 frames)
 +---------------+
       |
       v
 +---------------+
-| 3. Repeat      | Remove 3+ consecutive identical chars
-|    Filter      |
+| 2. mergeSplit  | Merge same text split by scene detection
+|    (gap ≤ 1.5s)|
 +---------------+
       |
       v
 +---------------+
-| 4. Confidence  | Penalize: mixed scripts, short text, repeated chars
-|    Calibration | Boost: consistent script, good diversity ratio
+| 3. mergeSimilar| Levenshtein similarity merge (default 80%)
+|    Bridge gaps  |
 +---------------+
       |
       v
 +---------------+
-| 5. Subtitle    | Levenshtein similarity merge (default 80%)
-|    Merging     | Bridge split subtitles (gap <= 1.5s)
-+---------------+
-      |
-      v
-+---------------+
-| 6. Jitter      | Remove: <0.3s duration + same text as neighbor
-|    Filter      |
+| 4. computeEndTime | Accurate end time based on next subtitle
 +---------------+
       |
       v
@@ -146,7 +133,7 @@ Raw OCR Text
 
 ## Export Format Architecture
 
-Each format is a pure function in `src/types/subtitle.ts`:
+Each format is a pure function in `src/core/SubtitleExporter.ts`:
 
 ```
 SubtitleItem[] --> formatSRT()     --> .srt
