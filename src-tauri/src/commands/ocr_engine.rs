@@ -7,6 +7,7 @@ use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 
 use super::types::BoundingBox;
+use super::utils::{find_python_binary, find_script, uuid_v4};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OCREngineConfig {
@@ -51,7 +52,7 @@ pub async fn init_ocr_engine(config: OCREngineConfig) -> Result<String, String> 
             // Check if Python and PaddleOCR are available
             match find_python_binary().await {
                 Ok(_) => {
-                    match find_paddle_ocr_script() {
+                    match find_script("paddle_ocr.py") {
                         Ok(script) => {
                             tracing::info!("PaddleOCR script found at: {}", script.display());
                             Ok("paddle-native".to_string())
@@ -155,7 +156,7 @@ pub async fn get_available_ocr_engines() -> HashMap<String, bool> {
     engines.insert("tesseract".to_string(), true);
 
     // Check PaddleOCR availability dynamically
-    let paddle_available = find_python_binary().await.is_ok() && find_paddle_ocr_script().is_ok();
+    let paddle_available = find_python_binary().await.is_ok() && find_script("paddle_ocr.py").is_ok();
     engines.insert("paddle".to_string(), paddle_available);
 
     // EasyOCR requires Python but not yet integrated
@@ -403,7 +404,7 @@ pub async fn process_paddle_ocr(
 
     // Find Python and the paddle_ocr.py script
     let python = find_python_binary().await?;
-    let script_path = find_paddle_ocr_script()?;
+    let script_path = find_script("paddle_ocr.py")?;
 
     tracing::info!("Calling PaddleOCR bridge: {} {}", python.to_string_lossy(), script_path.to_string_lossy());
 
@@ -526,7 +527,7 @@ pub async fn check_paddle_ocr_available() -> serde_json::Value {
         }
     };
 
-    let script_path = match find_paddle_ocr_script() {
+    let script_path = match find_script("paddle_ocr.py") {
         Ok(p) => p.to_string_lossy().to_string(),
         Err(e) => {
             return serde_json::json!({
@@ -571,66 +572,6 @@ pub async fn check_paddle_ocr_available() -> serde_json::Value {
             "message": "Failed to run PaddleOCR check"
         }),
     }
-}
-
-/// Find Python executable in PATH (async)
-async fn find_python_binary() -> Result<PathBuf, String> {
-    // Try common Python commands
-    let candidates = ["python3", "python", "python3.11", "python3.10", "python3.9"];
-    for cmd in candidates {
-        if let Ok(path) = tokio::process::Command::new(cmd).arg("--version").output().await {
-            if path.status.success() {
-                return Ok(PathBuf::from(cmd));
-            }
-        }
-    }
-    Err("Python not found in PATH. Please install Python 3.8+".to_string())
-}
-
-/// Find the paddle_ocr.py script
-fn find_paddle_ocr_script() -> Result<PathBuf, String> {
-    // Check multiple possible locations
-    let candidates: [Option<std::path::PathBuf>; 4] = [
-        // Bundled with the app (relative to executable)
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .map(|p| p.join("scripts").join("paddle_ocr.py")),
-        // Development path
-        Some(std::path::PathBuf::from("src-tauri/scripts/paddle_ocr.py")),
-        // Absolute development path for Agions' machine
-        Some(std::path::PathBuf::from("/root/.openclaw/workspace/HardSubX/src-tauri/scripts/paddle_ocr.py")),
-        // $HOME/... path
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(|p| p.join("src-tauri/scripts/paddle_ocr.py")),
-    ];
-
-    for candidate in candidates.into_iter().flatten() {
-        if candidate.exists() {
-            tracing::info!("Found paddle_ocr.py at: {}", candidate.display());
-            return Ok(candidate);
-        }
-    }
-
-    Err("paddle_ocr.py not found. Expected at: src-tauri/scripts/paddle_ocr.py".to_string())
-}
-
-/// Generate a simple UUID v4 (no external crate needed)
-fn uuid_v4() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let random: u64 = (now & 0xFFFFFFFFFFFFFFFF) as u64;
-    format!("{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        (now >> 96) as u32,
-        ((now >> 80) & 0xFFFF) as u16,
-        ((now >> 64) & 0x0FFF) as u16,
-        0x8000 | ((now >> 48) & 0x3FFF) as u16,
-        random
-    )
 }
 
 /// Process base64-encoded image directly with OCR
