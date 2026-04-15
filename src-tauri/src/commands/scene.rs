@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+use super::utils::{find_python_binary, find_script};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneDetectionConfig {
@@ -106,57 +108,6 @@ async fn get_video_fps(path: &str) -> Result<f64, String> {
     Ok(fps)
 }
 
-/// Find the scene_detect.py script location
-fn find_scene_detect_script() -> Result<PathBuf, String> {
-    let candidates: [Option<PathBuf>; 4] = [
-        // Bundled with the app (relative to executable)
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .map(|p| p.join("scripts").join("scene_detect.py")),
-        // Development path
-        Some(PathBuf::from("src-tauri/scripts/scene_detect.py")),
-        // Absolute development path
-        Some(PathBuf::from(
-            "/root/.openclaw/workspace/HardSubX/src-tauri/scripts/scene_detect.py",
-        )),
-        // CARGO_MANIFEST_DIR path
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(|p| p.join("src-tauri/scripts/scene_detect.py")),
-    ];
-
-    for candidate in candidates.into_iter().flatten() {
-        if candidate.exists() {
-            tracing::info!("Found scene_detect.py at: {}", candidate.display());
-            return Ok(candidate);
-        }
-    }
-
-    Err(
-        "scene_detect.py not found. Expected at: src-tauri/scripts/scene_detect.py".to_string(),
-    )
-}
-
-/// Find Python3 binary (async)
-async fn find_python3() -> Result<PathBuf, String> {
-    let candidates = ["python3", "python", "python3.11", "python3.10", "python3.9"];
-
-    for cmd in candidates {
-        if let Ok(output) = tokio::process::Command::new(cmd)
-            .arg("--version")
-            .output()
-            .await
-        {
-            if output.status.success() {
-                return Ok(PathBuf::from(cmd));
-            }
-        }
-    }
-
-    Err("Python3 not found in PATH. Please install Python 3.8+".to_string())
-}
-
 /// Detect scene changes using scenedetect Python library (async)
 /// Replaces deprecated ffmpeg showinfo-based approach.
 async fn detect_scenes_scenedetect(
@@ -164,8 +115,8 @@ async fn detect_scenes_scenedetect(
     threshold: f32,
     min_scene_len: u32,
 ) -> Result<Vec<f64>, String> {
-    let python = find_python3().await?;
-    let script = find_scene_detect_script()?;
+    let python = find_python_binary().await?;
+    let script = find_script("scene_detect.py")?;
 
     let output = tokio::process::Command::new(&python)
         .args([
