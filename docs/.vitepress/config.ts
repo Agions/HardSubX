@@ -37,10 +37,9 @@ export default defineConfig({
     sidebar: {
       '/guide/': [
         {
-          text: '指南',
+          text: '开始',
           items: [
             { text: '快速上手', link: '/guide/getting-started' },
-            { text: '安装依赖', link: '/guide/getting-started#prerequisites' },
             { text: 'OCR 引擎', link: '/guide/getting-started#ocr-engines' },
             { text: '键盘快捷键', link: '/guide/keyboard-shortcuts' },
           ],
@@ -51,6 +50,13 @@ export default defineConfig({
             { text: 'CLI 参考', link: '/guide/cli' },
             { text: '导出格式', link: '/guide/export-formats' },
             { text: '架构设计', link: '/guide/architecture' },
+          ],
+        },
+        {
+          text: '帮助',
+          items: [
+            { text: '常见问题', link: '/guide/faq' },
+            { text: '故障排除', link: '/guide/troubleshooting' },
           ],
         },
       ],

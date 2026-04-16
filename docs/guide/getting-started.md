@@ -33,11 +33,11 @@ SubLens 支持三种 OCR 引擎：
 
 | Engine | Technology | Accuracy | Speed | Languages |
 |:---|:---|:---:|:---:|:---:|
-| **PaddleOCR** | PP-OCRv5 Deep Learning | ⭐⭐⭐ Best | Fast | 80+ |
-| **EasyOCR** | PyTorch | ⭐⭐ Good | Medium | 80+ |
+| **EasyOCR** | PyTorch | ⭐⭐⭐ Best（字幕场景）| Medium | 80+ |
+| **PaddleOCR** | PP-OCRv5 Deep Learning | ⭐⭐⭐ 高精度 | Fast（GPU）| 80+ |
 | **Tesseract.js** | LSTM + WASM | ⭐⭐ Good | Fastest | 100+ |
 
-推荐使用 **PaddleOCR**（精度最高），或 **Tesseract.js**（无需安装 Python 环境）。
+字幕属于「自然场景文字」，**EasyOCR** 在这类场景表现最优，推荐优先使用。**PaddleOCR** 适合 GPU 用户追求极限精度；**Tesseract.js** 适合无 Python 环境的快速上手。
 
 ### GPU 加速（可选） {#gpu-acceleration}
 
