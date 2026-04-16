@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
+  base: '/SubLens/',
   title: 'SubLens',
   description: 'SubLens - 专业的视频字幕提取工具，从视频中提取硬编码字幕，支持多种格式输出。',
   lang: 'zh-CN',
