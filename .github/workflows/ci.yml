@@ -82,7 +82,7 @@ jobs:
             ffmpeg
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.85.0
 
       - name: Cache Rust cargo
         uses: Swatinem/rust-cache@v2
@@ -115,7 +115,7 @@ jobs:
             ffmpeg
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.85.0
 
       - name: Cache Rust cargo
         uses: Swatinem/rust-cache@v2
@@ -126,3 +126,8 @@ jobs:
         run: |
           cd src-tauri
           cargo test --lib --bins
+
+      - name: Cargo audit
+        run: |
+          cargo install cargo-audit
+          cargo audit

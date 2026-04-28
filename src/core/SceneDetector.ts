@@ -45,21 +45,26 @@ function chiSquareDistance(
   histA: Int32Array,
   histB: Int32Array,
   threshold: number,
-  binCount: number
+  binCount: number,
+  sampleCount: number
 ): number {
   const totalBins = binCount * 3
   let chiSquare = 0
 
   for (let b = 0; b < totalBins; b++) {
-    // Laplace smoothing: use max(histA[b], 1) to avoid zero-count division
-    // Add-one smoothing guarantees minimum expected count of 1
+    // Skip bins where both histograms agree on zero (no information content)
+    if (histA[b] === 0 && histB[b] === 0) continue
+    // For all other bins: (observed - expected)^2 / expected
+    // where expected = histA[b] (previous frame as reference)
+    // Add-one smoothing to handle zero expected counts
     const expected = histA[b] || 1
     const observed = histB[b]
     chiSquare += ((observed - expected) ** 2) / expected
   }
 
-  // 归一化：除以总 bins * threshold，得到 [0,1] 范围
-  return chiSquare / (totalBins * threshold)
+  // Normalize by sampleCount * threshold so distance is proportional
+  // to the average per-pixel contribution — threshold is stable across resolutions.
+  return chiSquare / (sampleCount * threshold)
 }
 
 export class SceneDetector {
@@ -80,7 +85,7 @@ export class SceneDetector {
     const prevHist = this.buildHistogram(prevFrame, binCount, sampleCount)
     const currHist = this.buildHistogram(currFrame, binCount, sampleCount)
 
-    const distance = chiSquareDistance(prevHist, currHist, threshold, binCount)
+    const distance = chiSquareDistance(prevHist, currHist, threshold, binCount, sampleCount)
     return distance > threshold
   }
 

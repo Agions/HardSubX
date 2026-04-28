@@ -85,10 +85,11 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
-        run: pnpm build
-        env:
-          CI: true
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: dist
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
