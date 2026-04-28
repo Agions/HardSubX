@@ -98,7 +98,8 @@ export class ConfidenceCalibrator {
     // ── 语言特定规则 ──────────────────────────────────────
     if (['ch', 'chi', 'ja', 'ko'].includes(lang)) {
       // 孤立 CJK 单字检测
-      if (/ [\u4e00-\u9fff] | [\u3040-\u30ff] /.test(text)) {
+      // Isolated CJK: space immediately before a CJK character
+      if (/[一-鿿]/.test(text) && / [一-鿿]/.test(text)) {
         const factor = 0.80
         quality *= factor
         signals.push(PENALTY(factor, 'orphaned CJK character'))
@@ -113,9 +114,11 @@ export class ConfidenceCalibrator {
         signals.push(PENALTY(factor, 'unbalanced quotation marks'))
       }
     } else {
-      // Latin 脚本规则
-      // 全大写惩罚（正常文本不应全大写）
-      if (trimmed === trimmed.toUpperCase() && len > 3 && /[a-z]/.test(trimmed)) {
+      // All-caps penalty: text is uppercase and contains at least one lowercase letter
+      // (catches OCR errors where mixed-case was read as all-caps)
+      // trim() normalizes, so check on trimmed: 'HELLo' is mixed case not all-caps
+      const upperOnly = trimmed.replace(/[^A-Z]/g, '')
+      if (upperOnly.length >= 4 && /[a-z]/.test(trimmed)) {
         const factor = 0.82
         quality *= factor
         signals.push(PENALTY(factor, 'all-caps (likely OCR error)'))
