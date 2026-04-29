@@ -43,13 +43,40 @@ export const DEFAULT_PIPELINE_OPTIONS: PipelineOptions = {
   similarSimilarityThreshold: 0.80,
 }
 
-// ─── Levenshtein 距离（带缓存）──────────────────────────────────────
-// LRU cache using Map (insertion-order aware) — O(1) delete via Map.delete
-const _similarityCache = new Map<string, number>()
-const MAX_CACHE_SIZE = 3000
-const TRIM_TO_SIZE = 2000
+// ─── Levenshtein 距离（带缓存 per-pipeline 实例）───────────────────────
+// 每个 SubtitlePipeline 实例拥有独立缓存，避免不同配置（threshold）互相干扰。
+// 3000 条缓存、LRU淘汰策略（同 original）。
 
-export function textSimilarity(a: string, b: string): number {
+interface CacheEntry { sim: number; ts: number }
+
+class SimilarityCache {
+  private _map = new Map<string, CacheEntry>()
+  private _order: string[] = []  // insertion order for LRU
+
+  get(key: string): number | undefined { return this._map.get(key)?.sim }
+
+  set(key: string, sim: number): void {
+    if (this._map.has(key)) {
+      this._map.get(key)!.sim = sim
+    } else {
+      this._map.set(key, { sim, ts: Date.now() })
+      this._order.push(key)
+      if (this._map.size > 3000) {
+        const oldest = this._order.shift()
+        if (oldest) { this._map.delete(oldest); this._order.shift() }
+        this._map.delete(this._order.shift()!)  // trim second oldest too
+        this._order.shift()
+      }
+    }
+  }
+
+  clear(): void { this._map.clear(); this._order = [] }
+}
+
+// module-level fallback cache for direct textSimilarity() calls (no pipeline instance)
+const _fallbackCache = new SimilarityCache()
+
+export function textSimilarity(a: string, b: string, cache?: SimilarityCache): number {
   if (a === b) return 1
   if (!a.length || !b.length) return 0
 
@@ -57,8 +84,8 @@ export function textSimilarity(a: string, b: string): number {
   const short = a.length <= b.length ? a : b
   const long = a.length <= b.length ? b : a
   const cacheKey = `${short.length}:${short.slice(0, 4)}|${long.slice(0, 8)}:${a}|${b}`
-  const cached = _similarityCache.get(cacheKey)
-  if (cached !== undefined) return cached
+  const activeCache = cache ?? _fallbackCache
+  if (cacheKey) { const hit = activeCache.get(cacheKey); if (hit !== undefined) return hit }
 
   const dp: number[] = Array.from({ length: long.length + 1 }, (_, i) => i)
   for (let i = 1; i <= short.length; i++) {
@@ -75,14 +102,7 @@ export function textSimilarity(a: string, b: string): number {
   const dist = dp[long.length]
   const sim = 1 - dist / Math.max(short.length, long.length)
 
-  // LRU 缓存淘汰 — Map.delete 是 O(1)，避免 Array.shift() 的 O(n)
-  if (_similarityCache.size >= MAX_CACHE_SIZE) {
-    for (const key of _similarityCache.keys()) {
-      if (_similarityCache.size <= TRIM_TO_SIZE) break
-      _similarityCache.delete(key)
-    }
-  }
-  _similarityCache.set(cacheKey, sim)
+  activeCache.set(cacheKey, sim)
   return sim
 }
 
@@ -105,7 +125,7 @@ function stage0_normalize(subs: SubtitleLite[]): SubtitleLite[] {
 }
 
 // ─── Stage 1: 过滤 OCR 噪声 ───────────────────────────────────────
-function stage1_filterJitter(subs: SubtitleLite[], opts: PipelineOptions): SubtitleLite[] {
+function stage1_filterJitter(subs: SubtitleLite[], opts: PipelineOptions, cache: SimilarityCache): SubtitleLite[] {
   if (subs.length < 2) return subs
 
   const result: SubtitleLite[] = []
@@ -127,8 +147,8 @@ function stage1_filterJitter(subs: SubtitleLite[], opts: PipelineOptions): Subti
     const prev = result[result.length - 1]
     const next = subs[i + 1]
 
-    const simPrev = prev ? textSimilarity(prev.text, curr.text) : 0
-    const simNext = next ? textSimilarity(curr.text, next.text) : 0
+    const simPrev = prev ? textSimilarity(prev.text, curr.text, cache) : 0
+    const simNext = next ? textSimilarity(curr.text, next.text, cache) : 0
     const similarThreshold = opts.splitSimilarityThreshold
 
     if (simPrev >= similarThreshold && simNext >= similarThreshold) {
@@ -157,7 +177,7 @@ function stage1_filterJitter(subs: SubtitleLite[], opts: PipelineOptions): Subti
 }
 
 // ─── Stage 2: 合并分裂字幕 ─────────────────────────────────────────
-function stage2_mergeSplit(subs: SubtitleLite[], opts: PipelineOptions): SubtitleLite[] {
+function stage2_mergeSplit(subs: SubtitleLite[], opts: PipelineOptions, cache: SimilarityCache): SubtitleLite[] {
   if (subs.length < 2) return subs
 
   const groups: SubtitleLite[][] = []
@@ -171,7 +191,7 @@ function stage2_mergeSplit(subs: SubtitleLite[], opts: PipelineOptions): Subtitl
 
     const prev = last[last.length - 1]
     const gap = sub.startTime - prev.endTime
-    const sim = textSimilarity(prev.text, sub.text)
+    const sim = textSimilarity(prev.text, sub.text, cache)
     const gapWithinLimit = gap > 0 && gap <= opts.splitMaxGap
 
     if (sim >= opts.splitSimilarityThreshold && gapWithinLimit) {
@@ -197,7 +217,7 @@ function stage2_mergeSplit(subs: SubtitleLite[], opts: PipelineOptions): Subtitl
 }
 
 // ─── Stage 3: 合并相似相邻字幕 ─────────────────────────────────────
-function stage3_mergeSimilar(subs: SubtitleLite[], opts: PipelineOptions): SubtitleLite[] {
+function stage3_mergeSimilar(subs: SubtitleLite[], opts: PipelineOptions, cache: SimilarityCache): SubtitleLite[] {
   if (subs.length === 0) return subs
 
   const result: SubtitleLite[] = []
@@ -207,7 +227,7 @@ function stage3_mergeSimilar(subs: SubtitleLite[], opts: PipelineOptions): Subti
     const prev = subs[i - 1]
     const curr = subs[i]
     const gap = curr.startTime - prev.endTime
-    const sim = textSimilarity(current.text, curr.text)
+    const sim = textSimilarity(current.text, curr.text, cache)
 
     if (sim >= opts.similarSimilarityThreshold && gap <= opts.similarMaxGap) {
       // 合并
@@ -240,6 +260,7 @@ function stage4_computeEndTime(subs: SubtitleLite[]): SubtitleLite[] {
 // ─── 主管道 ─────────────────────────────────────────────────────
 export class SubtitlePipeline {
   private opts: PipelineOptions
+  private _cache = new SimilarityCache()
 
   constructor(opts: Partial<PipelineOptions> = {}) {
     this.opts = { ...DEFAULT_PIPELINE_OPTIONS, ...opts }
@@ -260,13 +281,13 @@ export class SubtitlePipeline {
     result = stage0_normalize(result)
 
     // Stage 1: 过滤噪声
-    result = stage1_filterJitter(result, this.opts)
+    result = stage1_filterJitter(result, this.opts, this._cache)
 
     // Stage 2: 合并分裂字幕
-    result = stage2_mergeSplit(result, this.opts)
+    result = stage2_mergeSplit(result, this.opts, this._cache)
 
     // Stage 3: 合并相似字幕
-    result = stage3_mergeSimilar(result, this.opts)
+    result = stage3_mergeSimilar(result, this.opts, this._cache)
 
     // Stage 4: 计算准确时长
     result = stage4_computeEndTime(result)
@@ -279,9 +300,9 @@ export class SubtitlePipeline {
     let result = [...rawSubs]
     result.sort((a, b) => a.startTime - b.startTime)
     if (stage >= 0) result = stage0_normalize(result)
-    if (stage >= 1) result = stage1_filterJitter(result, this.opts)
-    if (stage >= 2) result = stage2_mergeSplit(result, this.opts)
-    if (stage >= 3) result = stage3_mergeSimilar(result, this.opts)
+    if (stage >= 1) result = stage1_filterJitter(result, this.opts, this._cache)
+    if (stage >= 2) result = stage2_mergeSplit(result, this.opts, this._cache)
+    if (stage >= 3) result = stage3_mergeSimilar(result, this.opts, this._cache)
     if (stage >= 4) result = stage4_computeEndTime(result)
     return result
   }
@@ -299,6 +320,6 @@ export class SubtitlePipeline {
 
   /** 清空相似度缓存 */
   clearCache(): void {
-    _similarityCache.clear()
+    this._cache.clear()
   }
 }
