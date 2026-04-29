@@ -168,6 +168,10 @@ async fn process_with_tesseract(
         }
 
         let conf: f32 = fields[10].parse().unwrap_or(0.0);
+        if conf == 0.0 && fields[10].trim() != "0" && fields[10].trim() != "0.0" {
+            tracing::debug!("Failed to parse confidence '{}' from tesseract TSV row, skipping", fields[10]);
+            continue;
+        }
         let left: u32 = fields[6].parse().unwrap_or(0);
         let top: u32 = fields[7].parse().unwrap_or(0);
         let w: u32 = fields[8].parse().unwrap_or(0);

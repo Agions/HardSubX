@@ -58,15 +58,18 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     return result
   })
 
-  // Confidence level statistics — single pass O(n)
+  // Confidence level statistics — respects active confidence filter (single pass O(n))
   const confidenceStats = computed(() => {
     let low = 0, mid = 0, high = 0
-    for (const s of subtitles.value) {
+    const subs = confidenceFilter.value === 'all'
+      ? subtitles.value
+      : filteredSubtitles.value  // use filtered view so stats match visible list
+    for (const s of subs) {
       if (s.confidence < CONFIDENCE_MID) low++
       else if (s.confidence < CONFIDENCE_HIGH) mid++
       else high++
     }
-    return { low, mid, high, total: subtitles.value.length }
+    return { low, mid, high, total: subs.length }
   })
 
   // Low-confidence subtitles for batch operations
@@ -110,11 +113,11 @@ export const useSubtitleStore = defineStore('subtitle', () => {
       else hi = mid
     }
     arr.splice(lo, 0, sub)
-    // Re-index only from insertion point
-    for (let i = lo; i < arr.length; i++) arr[i].index = i + 1
-    // Update map for shifted items
-    for (let i = lo + 1; i < arr.length; i++) _subtitleIndexMap.set(arr[i].id, i)
-    _subtitleIndexMap.set(sub.id, lo)
+    // Re-index from insertion point — compute end once, avoid in-loop mutation of arr refs
+    const newLen = arr.length
+    for (let i = lo; i < newLen; i++) arr[i].index = i + 1
+    // Rebuild map once after splice (avoids double-loop over shifted suffix)
+    for (let i = lo; i < newLen; i++) _subtitleIndexMap.set(arr[i].id, i)
   }
   
   function updateSubtitle(id: string, updates: Partial<SubtitleItem>) {

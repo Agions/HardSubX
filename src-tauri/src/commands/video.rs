@@ -179,8 +179,11 @@ fn parse_stream_from_ffmpeg(output: &str) -> (u32, u32, f64) {
                     }
                 }
                 if part.contains("fps") {
-                    let fps_str = part.split_whitespace().next().unwrap_or("30");
-                    fps = fps_str.parse().unwrap_or(30.0);
+                    // "25fps", "29.97fps", "30000/1001 fps" → extract numeric portion
+                    let fps_candidate = part.split_whitespace().next().unwrap_or("30");
+                    // Strip non-numeric suffix like "fps"
+                    let numeric = fps_candidate.trim_end_matches(|c: char| !c.is_ascii_digit() && c != '.');
+                    fps = numeric.parse().unwrap_or(30.0);
                 }
             }
             break;
@@ -314,14 +317,13 @@ pub async fn extract_frames(
         total_extractable, frame_interval, total_possible
     );
 
-    // For ROI cropping, we use ffmpeg to extract specific regions
-    // Build ffmpeg crop filter based on ROI coordinates
-    let _crop_filter = build_roi_crop_filter(&roi, metadata.width, metadata.height);
-
-    tracing::info!("ROI crop filter: {}", _crop_filter);
-
-    // Return frame metadata list
-    // Frontend should use extract_cropped_frame_at_time for actual frame extraction
+    // Return frame metadata list.
+    // Actual frame extraction with ROI applied must go through
+    // extract_cropped_frame_at_time() which correctly wires the crop filter.
+    // extract_frames() only returns timing metadata — it does NOT extract image data.
+    if total_extractable == 0 {
+        return Ok(vec![]);
+    }
     let frames: Vec<Frame> = (0..total_extractable)
         .map(|i| {
             let frame_index = (i * frame_interval as usize) as u64;
@@ -542,10 +544,7 @@ pub async fn detect_scenes(
 }
 
 async fn detect_scenes_ffmpeg(path: &str, threshold: f32, fps: f64) -> Result<Vec<u64>, String> {
-    // Use ffmpeg with select filter for scene detection
-    // This outputs frame numbers where scene changes are detected
-    let _threshold_str = format!("{}", (threshold * 255.0) as i32);
-
+    // ffmpeg select filter expects a float in 0-1 range (scene score comparison)
     let output = tokio::process::Command::new("ffmpeg")
         .args([
             "-i",

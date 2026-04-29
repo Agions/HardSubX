@@ -94,73 +94,63 @@ export function useBatchProcessor() {
   // Start batch processing with concurrency control
   async function startBatch(options: BatchOptions) {
     if (isProcessing.value) return
-    
+
     isProcessing.value = true
     batchStartTime.value = Date.now()
-    
+
     const maxConcurrency = options.maxConcurrency || 2
-    const pendingJobs = jobs.value.filter(j => j.status === 'pending')
-    
-    // Process jobs with concurrency limit
-    const chunk = pendingJobs.slice(0, maxConcurrency)
-    const remaining = pendingJobs.slice(maxConcurrency)
-    
-    // Start concurrent processing
-    const processChunk = async () => {
-      const running: Promise<void>[] = []
-      
-      for (const job of chunk) {
-        if (!isProcessing.value) break
-        
-        const promise = (async () => {
-          currentJob.value = job
-          job.status = 'processing'
-          job.startedAt = new Date()
-          
-          try {
-            await processJob(job, options)
-            job.status = 'completed'
-            job.progress = 100
-          } catch (e) {
-            job.status = 'failed'
-            job.error = e instanceof Error ? e.message : String(e)
-          } finally {
-            job.completedAt = new Date()
-            currentJob.value = null
-          }
-        })()
-        
-        running.push(promise)
-      }
-      
-      await Promise.all(running)
-    }
-    
-    await processChunk()
-    
-    // Process remaining jobs
-    for (const job of remaining) {
-      if (!isProcessing.value) break
-      
-      currentJob.value = job
+    const allPending = jobs.value.filter(j => j.status === 'pending')
+    const running: Set<BatchJob> = new Set()
+
+    // True sliding-window concurrency: fill window, replenish as jobs complete
+    const enqueue = (job: BatchJob) => {
+      running.add(job)
       job.status = 'processing'
       job.startedAt = new Date()
-      
-      try {
-        await processJob(job, options)
-        job.status = 'completed'
-        job.progress = 100
-      } catch (e) {
-        job.status = 'failed'
-        job.error = e instanceof Error ? e.message : String(e)
-      } finally {
-        job.completedAt = new Date()
-      }
+      const start = Date.now()
+      processJob(job, options)
+        .then(() => {
+          job.status = 'completed'
+          job.progress = 100
+        })
+        .catch((e) => {
+          job.status = 'failed'
+          job.error = e instanceof Error ? e.message : String(e)
+        })
+        .finally(() => {
+          running.delete(job)
+          job.completedAt = new Date()
+          updateAvgProcessingTime(Date.now() - start)
+        })
     }
-    
-    currentJob.value = null
+
+    // Fill initial window
+    for (const job of allPending.slice(0, maxConcurrency)) {
+      enqueue(job)
+    }
+
+    // Replenish as slots free up, until cancelled or queue empty
+    for (let i = maxConcurrency; i < allPending.length && isProcessing.value; i++) {
+      // Wait for at least one running job to finish before launching the next
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (!isProcessing.value || running.size < maxConcurrency) {
+            clearInterval(check)
+            resolve()
+          }
+        }, 50)
+      })
+      if (isProcessing.value) enqueue(allPending[i])
+    }
+
+    // Wait for all running jobs to finish
+    while (running.size > 0 && isProcessing.value) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 50))
+    }
+
     isProcessing.value = false
     batchStartTime.value = null
+    currentJob.value = null
   }
 
   // Process single job - actual implementation
