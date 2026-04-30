@@ -176,3 +176,17 @@ $z-toast:   500;
 // Never remove outline - provide clear focus states
 $focus-ring: 0 0 0 2px $bg-base, 0 0 0 4px $primary;
 $focus-ring-inset: inset 0 0 0 2px $primary;
+
+// ── Responsive Breakpoints (Mobile-first) ─────────────────────────
+// Usage: @media #{$bp-sm} { ... }
+$bp-xs:   "max-width: 480px";
+$bp-sm:   "min-width: 640px";
+$bp-md:   "min-width: 768px";
+$bp-lg:   "min-width: 1024px";
+$bp-xl:   "min-width: 1280px";
+$bp-2xl:  "min-width: 1536px";
+
+// Breakpoint-specific layout overrides
+$sidebar-width-sm:       240px;
+$subtitle-panel-width-sm: 280px;
+$timeline-height-sm:     100px;

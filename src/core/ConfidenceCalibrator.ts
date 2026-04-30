@@ -31,6 +31,29 @@ function clamp(v: number): number {
   return Math.max(0, Math.min(1, v))
 }
 
+// ── Quality factor constants ────────────────────────────────────
+const F_MIXED_SCRIPTS    = 0.80
+const F_TEXT_TOO_SHORT   = 0.85
+const F_REPEATED_CHAR    = 0.75
+const F_CHAR_DIVERSITY   = 1.05
+const F_ORPHANED_CJK     = 0.80
+const F_UNBALANCED_QUOTE = 0.90
+const F_ALL_CAPS         = 0.82
+const F_ISOLATED_DIGIT   = 0.88
+const F_SENTENCE_END     = 1.03
+const F_TRAILING_COMMA   = 0.88
+const F_REPEATED_PUNCT   = 0.85
+const F_GOOD_LENGTH      = 1.04
+const F_TOO_LONG         = 0.92
+const F_LEADING_SPACE    = 0.90
+
+// ── Threshold constants ─────────────────────────────────────────
+const TH_CHAR_DIVERSITY_LOW  = 0.6
+const TH_CHAR_DIVERSITY_HIGH = 0.95
+const TH_LEN_GOOD_MIN        = 5
+const TH_LEN_GOOD_MAX        = 120
+const TH_LEN_SUSPICIOUS      = 200
+
 export class ConfidenceCalibrator {
   /**
    * 基础校准（单次 OCR 识别结果）
@@ -50,21 +73,21 @@ export class ConfidenceCalibrator {
 
     // 脚本混用惩罚
     if (scriptCount >= 2) {
-      const factor = 0.80
+      const factor = F_MIXED_SCRIPTS
       quality *= factor
       signals.push(PENALTY(factor, 'mixed scripts detected'))
     }
 
     // 文本过短惩罚
     if (len > 0 && len <= 2) {
-      const factor = 0.85
+      const factor = F_TEXT_TOO_SHORT
       quality *= factor
       signals.push(PENALTY(factor, 'text too short (<3 chars)'))
     }
 
     // 重复字符惩罚
     if (/(.)\1{3,}/.test(text)) {
-      const factor = 0.75
+      const factor = F_REPEATED_CHAR
       quality *= factor
       signals.push(PENALTY(factor, 'repeated character pattern'))
     }
@@ -72,8 +95,8 @@ export class ConfidenceCalibrator {
     // 字符多样性奖励（正常文本 unique ratio 在 0.6-0.95）
     const unique = new Set(text.replace(/\s/g, '')).size
     const ratio = len > 0 ? unique / len : 1
-    if (ratio > 0.6 && ratio < 0.95) {
-      const factor = 1.05
+    if (ratio > TH_CHAR_DIVERSITY_LOW && ratio < TH_CHAR_DIVERSITY_HIGH) {
+      const factor = F_CHAR_DIVERSITY
       quality = Math.min(1, quality * factor)
       signals.push(BONUS(factor, 'healthy character diversity'))
     }
@@ -102,7 +125,7 @@ export class ConfidenceCalibrator {
       // Unicode扩展区B（U+20000-U+2A6DF）已在正则覆盖
       // 孤立 CJK 单字检测
       if (/[\u4e00-\u9fff\u20000-\u2a6df]/.test(text) && / [\u4e00-\u9fff\u20000-\u2a6df]/.test(text)) {
-        const factor = 0.80
+        const factor = F_ORPHANED_CJK
         quality *= factor
         signals.push(PENALTY(factor, 'orphaned CJK character'))
       }
@@ -111,7 +134,7 @@ export class ConfidenceCalibrator {
       const dq = (text.match(/"/g) || []).length
       const sq = (text.match(/'/g) || []).length
       if (dq % 2 !== 0 || sq % 2 !== 0) {
-        const factor = 0.90
+        const factor = F_UNBALANCED_QUOTE
         quality *= factor
         signals.push(PENALTY(factor, 'unbalanced quotation marks'))
       }
@@ -121,28 +144,28 @@ export class ConfidenceCalibrator {
       // trim() normalizes, so check on trimmed: 'HELLo' is mixed case not all-caps
       const upperOnly = trimmed.replace(/[^A-Z]/g, '')
       if (upperOnly.length >= 4 && /[a-z]/.test(trimmed)) {
-        const factor = 0.82
+        const factor = F_ALL_CAPS
         quality *= factor
         signals.push(PENALTY(factor, 'all-caps (likely OCR error)'))
       }
 
       // 孤立数字片段
       if (/ \d{1,3} /.test(text)) {
-        const factor = 0.88
+        const factor = F_ISOLATED_DIGIT
         quality *= factor
         signals.push(PENALTY(factor, 'isolated digit fragment'))
       }
 
       // 正确句子结尾奖励
       if (/[.!?]$/.test(trimmed)) {
-        const factor = 1.03
+        const factor = F_SENTENCE_END
         quality = Math.min(1, quality * factor)
         signals.push(BONUS(factor, 'proper sentence ending'))
       }
 
       // 尾随逗号（不完整句子）
       if (/[,;]\s*$/.test(trimmed) && !/[.!?]$/.test(trimmed)) {
-        const factor = 0.88
+        const factor = F_TRAILING_COMMA
         quality *= factor
         signals.push(PENALTY(factor, 'trailing comma (incomplete sentence)'))
       }
@@ -151,26 +174,26 @@ export class ConfidenceCalibrator {
     // ── 通用规则 ──────────────────────────────────────────
     // 重复标点惩罚
     if (/[、,\.。\-_]{3,}$/.test(text)) {
-      const factor = 0.85
+      const factor = F_REPEATED_PUNCT
       quality *= factor
       signals.push(PENALTY(factor, 'repeated trailing punctuation'))
     }
 
     // 长度合理奖励
-    if (len >= 5 && len <= 120) {
-      const factor = 1.04
+    if (len >= TH_LEN_GOOD_MIN && len <= TH_LEN_GOOD_MAX) {
+      const factor = F_GOOD_LENGTH
       quality = Math.min(1, quality * factor)
       signals.push(BONUS(factor, 'reasonable subtitle length'))
     }
-    if (len > 200) {
-      const factor = 0.92
+    if (len > TH_LEN_SUSPICIOUS) {
+      const factor = F_TOO_LONG
       quality *= factor
       signals.push(PENALTY(factor, 'suspiciously long subtitle'))
     }
 
     // 开头空格/标点惩罚
     if (/^[\s,.!?;:]/.test(trimmed)) {
-      const factor = 0.90
+      const factor = F_LEADING_SPACE
       quality *= factor
       signals.push(PENALTY(factor, 'leading whitespace or punctuation'))
     }

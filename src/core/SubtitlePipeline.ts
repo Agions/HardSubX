@@ -43,6 +43,15 @@ export const DEFAULT_PIPELINE_OPTIONS: PipelineOptions = {
   similarSimilarityThreshold: 0.80,
 }
 
+// ── Pipeline threshold constants ────────────────────────────────
+// Cached similarity limit (used by SimilarityCache)
+const SIMILARITY_CACHE_MAX_SIZE = 3000
+const SIMILARITY_CACHE_TRIM_TO  = 2500
+
+// Levenshtein similarity thresholds
+const TH_SIMILARITY_HIGH = 0.85  // split-merge threshold
+const TH_SIMILARITY_MID  = 0.80  // similar-merge threshold
+
 // ─── Levenshtein 距离（带缓存 per-pipeline 实例）───────────────────────
 // 每个 SubtitlePipeline 实例拥有独立缓存，避免不同配置（threshold）互相干扰。
 // 3000 条缓存、LRU淘汰策略（同 original）。
@@ -62,8 +71,8 @@ class SimilarityCache {
       this._map.set(key, { sim, ts: Date.now() })
       this._order.push(key)
       // Batch delete when exceeding limit (removes multiple entries to avoid O(n) repeated shifts)
-      if (this._map.size > 3000) {
-        const deleteCount = this._map.size - 2500  // Keep 2500 entries for headroom
+      if (this._map.size > SIMILARITY_CACHE_MAX_SIZE) {
+        const deleteCount = this._map.size - SIMILARITY_CACHE_TRIM_TO  // Keep headroom entries
         const removed = this._order.splice(0, deleteCount)
         removed.forEach(k => this._map.delete(k))
       }

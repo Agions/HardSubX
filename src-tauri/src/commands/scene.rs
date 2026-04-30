@@ -131,7 +131,7 @@ async fn detect_scenes_scenedetect(
 
     let output = tokio::process::Command::new(&python)
         .args([
-            script.to_str().unwrap(),
+            &script.to_string_lossy(),
             path,
             &format!("{}", threshold.clamp(0.05, 0.95)),
             &min_scene_len.to_string(),

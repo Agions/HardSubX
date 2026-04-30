@@ -321,6 +321,16 @@ pub async fn ocr_image_tesseract(
     
     let processing_time_ms = start.elapsed().as_millis() as u64;
     
+    // Log warning if no text was detected
+    if items.is_empty() {
+        tracing::warn!(
+            "OCR returned no text for image (lang: {}, time: {}ms). \
+             Possible causes: image quality too low, language mismatch, or text absent.",
+            language,
+            processing_time_ms
+        );
+    }
+    
     // Detect language (best effort based on what was requested)
     let language_detected = if language.contains("chi") {
         "chinese".to_string()

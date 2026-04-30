@@ -2,6 +2,7 @@
 import { ref, computed, onUnmounted, inject } from 'vue'
 import { useProjectStore } from '@/stores/project'
 import { useSubtitleStore } from '@/stores/subtitle'
+import { formatFrameToTime } from '@/utils/time'
 
 const projectStore = useProjectStore()
 const subtitleStore = useSubtitleStore()
@@ -18,6 +19,10 @@ const isHovering = ref(false)
 const hoverFrame = ref(0)
 const hoverPosition = ref({ x: 0, y: 0 })
 const hoverThumbnail = ref<string | null>(null)
+
+// Keyboard navigation state
+const focusedMarkerIndex = ref(-1)
+const timelineRef = ref<HTMLElement | null>(null)
 
 // Video control functions from VideoPreview
 const seekToFrame = inject<(frame: number) => void>('seekToFrame')
@@ -104,22 +109,83 @@ function handleTimelineLeave() {
   isHovering.value = false
 }
 
-function formatTime(frame: number): string {
-  const seconds = frame / fps.value
-  const hrs = Math.floor(seconds / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  const secs = Math.floor(seconds % 60)
-
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
 })
+
+// ── Keyboard Navigation ──────────────────────────────────────
+function handleTimelineKeydown(e: KeyboardEvent) {
+  if (subtitleMarkers.value.length === 0) return
+  
+  switch (e.key) {
+    case 'ArrowLeft':
+      e.preventDefault()
+      // Move to previous marker or playhead
+      if (focusedMarkerIndex.value > 0) {
+        focusedMarkerIndex.value--
+      } else {
+        // Jump to previous subtitle before current frame
+        const currentFrame = projectStore.currentFrame
+        const prevMarker = [...subtitleMarkers.value]
+          .reverse()
+          .find(m => m.endFrame < currentFrame - 1)
+        if (prevMarker) {
+          emit('seek', Math.max(0, prevMarker.frame - 1))
+        } else {
+          emit('seek', Math.max(0, currentFrame - fps.value)) // Back ~1 second
+        }
+      }
+      break
+      
+    case 'ArrowRight':
+      e.preventDefault()
+      // Move to next marker or playhead
+      if (focusedMarkerIndex.value < subtitleMarkers.value.length - 1) {
+        focusedMarkerIndex.value++
+      } else {
+        // Jump to next subtitle after current frame
+        const currentFrame = projectStore.currentFrame
+        const nextMarker = subtitleMarkers.value
+          .find(m => m.frame > currentFrame + 1)
+        if (nextMarker) {
+          emit('seek', nextMarker.frame)
+        } else {
+          emit('seek', Math.min(totalFrames.value - 1, currentFrame + fps.value)) // Forward ~1 second
+        }
+      }
+      break
+      
+    case 'Enter':
+    case ' ':
+      e.preventDefault()
+      // Select/seek to focused marker or current position
+      if (focusedMarkerIndex.value >= 0 && focusedMarkerIndex.value < subtitleMarkers.value.length) {
+        const marker = subtitleMarkers.value[focusedMarkerIndex.value]
+        emit('select', marker.id)
+        emit('seek', marker.frame)
+      }
+      break
+      
+    case 'Home':
+      e.preventDefault()
+      focusedMarkerIndex.value = 0
+      emit('seek', 0)
+      break
+      
+    case 'End':
+      e.preventDefault()
+      focusedMarkerIndex.value = subtitleMarkers.value.length - 1
+      emit('seek', totalFrames.value - 1)
+      break
+      
+    case 'Escape':
+      e.preventDefault()
+      focusedMarkerIndex.value = -1
+      timelineRef.value?.blur()
+      break
+  }
+}
 
 const totalFrames = computed(() => projectStore.videoMeta?.totalFrames ?? 0)
 const fps = computed(() => projectStore.videoMeta?.fps ?? 30)
@@ -166,8 +232,8 @@ function resetZoom() {
   zoomLevel.value = 1
 }
 
-const currentTime = computed(() => formatTime(projectStore.currentFrame))
-const totalTime = computed(() => formatTime(totalFrames.value))
+const currentTime = computed(() => formatFrameToTime(projectStore.currentFrame, fps))
+const totalTime = computed(() => formatFrameToTime(totalFrames.value, fps))
 const currentFrame = computed(() => projectStore.currentFrame)
 const subtitleCount = computed(() => subtitleStore.totalCount)
 </script>
@@ -217,16 +283,24 @@ const subtitleCount = computed(() => subtitleStore.totalCount)
           class="ruler-mark"
           :style="{ left: `${(i * fps * 10 / totalFrames) * 100}%` }"
         >
-          {{ formatTime(i * fps * 10) }}
+          {{ formatFrameToTime(i * fps * 10, fps) }}
         </span>
       </div>
 
       <!-- Track -->
       <div
         class="timeline-track"
+        tabindex="0"
+        role="slider"
+        :aria-valuenow="projectStore.currentFrame"
+        :aria-valuemin="0"
+        :aria-valuemax="totalFrames"
+        aria-label="Timeline navigation"
         @click="handleTimelineClick"
         @mousemove="handleTimelineHover"
         @mouseleave="handleTimelineLeave"
+        @keydown="handleTimelineKeydown"
+        ref="timelineRef"
       >
         <!-- Subtitle Markers -->
         <div
@@ -271,7 +345,7 @@ const subtitleCount = computed(() => subtitleStore.totalCount)
           class="preview-thumbnail"
           alt="Frame preview"
         />
-        <span class="preview-time">{{ formatTime(hoverFrame) }}</span>
+        <span class="preview-time">{{ formatFrameToTime(hoverFrame, fps) }}</span>
         <span class="preview-frame">#{{ hoverFrame.toLocaleString() }}</span>
       </div>
     </div>
@@ -443,6 +517,12 @@ const subtitleCount = computed(() => subtitleStore.totalCount)
     opacity: 1;
     box-shadow: 0 0 8px rgba($primary, 0.4);
   }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+    transform: scaleY(1.1);
+  }
 }
 
 .marker-label {
@@ -464,13 +544,21 @@ const subtitleCount = computed(() => subtitleStore.totalCount)
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 3px;
   transform: translateX(-50%);
   z-index: $z-dropdown;
   cursor: grab;
+  // Enhanced glow effect for better visibility
+  filter: drop-shadow(0 0 6px rgba($primary, 0.6));
   
   &.dragging {
     cursor: grabbing;
+    width: 4px;
+    filter: drop-shadow(0 0 10px rgba($primary, 0.8));
+    
+    .playhead-head::after {
+      animation-duration: 0.8s; // Faster pulse when dragging
+    }
   }
 }
 
@@ -479,36 +567,64 @@ const subtitleCount = computed(() => subtitleStore.totalCount)
   top: -2px;
   left: 50%;
   transform: translateX(-50%);
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   background: var(--primary);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba($primary, 0.5);
-  transition: transform $duration-fast $ease-out-expo;
+  box-shadow: 
+    0 0 0 2px var(--bg-surface),
+    0 0 12px rgba($primary, 0.6),
+    0 0 24px rgba($primary, 0.3);
+  transition: 
+    transform $duration-fast $ease-out-expo,
+    box-shadow $duration-fast $ease-out-expo;
 
+  // Outer glow ring
   &::after {
     content: '';
     position: absolute;
-    inset: -3px;
-    background: rgba($primary, 0.25);
+    inset: -4px;
+    background: rgba($primary, 0.2);
     border-radius: 50%;
     animation: head-pulse 2s ease-in-out infinite;
+    z-index: -1;
   }
 }
 
 .playhead-line {
   position: absolute;
-  top: 8px;
+  top: 10px;
   bottom: 0;
   left: 50%;
-  width: 2px;
+  width: 3px;
   transform: translateX(-50%);
-  background: var(--primary);
-  box-shadow: 0 0 6px rgba($primary, 0.4);
+  background: linear-gradient(180deg, var(--primary) 0%, rgba($primary, 0.6) 100%);
+  box-shadow: 
+    0 0 8px rgba($primary, 0.5),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+  
+  // Add bottom handle indicator
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--primary);
+    filter: drop-shadow(0 2px 4px rgba($primary, 0.4));
+  }
 }
 
 .timeline-track:hover .playhead-head {
-  transform: translateX(-50%) scale(1.2);
+  transform: translateX(-50%) scale(1.25);
+  box-shadow: 
+    0 0 0 2px var(--bg-surface),
+    0 0 16px rgba($primary, 0.7),
+    0 0 32px rgba($primary, 0.4);
 }
 
 // ── Footer ─────────────────────────────────────────────────

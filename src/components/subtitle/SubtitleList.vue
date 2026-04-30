@@ -163,6 +163,29 @@ const exportFormatKeys = Object.keys(subtitleStore.exportFormats) as (keyof Expo
           @mouseenter="hoveredId = sub.id"
           @mouseleave="hoveredId = null"
         >
+          <!-- Action buttons (visible on hover) -->
+          <div class="card-actions">
+            <button 
+              class="card-action-btn" 
+              @click.stop="startEdit(sub.id)"
+              title="编辑 (双击)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button 
+              class="card-action-btn" 
+              @click.stop="subtitleStore.removeSubtitle(sub.id)"
+              title="删除"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+              </svg>
+            </button>
+          </div>
+
           <!-- Header row -->
           <div class="card-header">
             <div class="card-meta">
@@ -614,10 +637,26 @@ const exportFormatKeys = Object.keys(subtitleStore.exportFormats) as (keyof Expo
   overflow: hidden;
   animation: card-in $duration-normal $ease-out-expo both;
   @include pressable;
+  // ── Enhanced hover interactions ───────────────────────────
+  transition: 
+    transform $duration-fast $ease-out-expo,
+    border-color $duration-fast $ease-out-expo,
+    box-shadow $duration-fast $ease-out-expo;
 
   &:hover {
     border-color: var(--border-light);
-    box-shadow: $shadow-sm;
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
+    
+    // Reveal action buttons on hover
+    .card-actions {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  &:active:not(.is-edited) {
+    transform: scale(0.98);
   }
 
   &.is-selected {
@@ -645,6 +684,49 @@ const exportFormatKeys = Object.keys(subtitleStore.exportFormats) as (keyof Expo
     opacity: 0;
     transition: opacity $duration-fast $ease-out-expo;
   }
+}
+
+// ── Card Action Buttons ─────────────────────────────────────
+.card-actions {
+  position: absolute;
+  top: $space-2;
+  right: $space-2;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: 
+    opacity $duration-fast $ease-out-expo,
+    transform $duration-fast $ease-out-expo;
+  z-index: 2;
+}
+
+.card-action-btn {
+  @include flex-center;
+  width: 28px;
+  height: 28px;
+  border-radius: $radius-md;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all $duration-fast $ease-out-expo;
+
+  &:hover {
+    background: var(--bg-surface);
+    border-color: var(--border-light);
+    color: var(--text-primary);
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+}
 
   .conf-heatmap {
     position: absolute;
@@ -873,32 +955,93 @@ const exportFormatKeys = Object.keys(subtitleStore.exportFormats) as (keyof Expo
 
 // ── Skeleton ─────────────────────────────────────────────────
 .skeleton-card {
+  position: relative;
   padding: $space-3;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  background:
-    linear-gradient(90deg,
-      var(--bg-elevated) 0%,
-      var(--bg-overlay) 40%,
-      var(--bg-elevated) 80%);
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  background: var(--bg-elevated);
+  overflow: hidden;
+
+  // Shimmer animation
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.04) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+
+  // Add subtle pulse
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--bg-elevated);
+    animation: skeleton-pulse 1.8s ease-in-out infinite;
+  }
 
   .skeleton-header {
+    position: relative;
     display: flex;
     gap: $space-2;
     margin-bottom: $space-2;
+    z-index: 1;
   }
 
   .sk {
+    position: relative;
     background: var(--bg-overlay);
     border-radius: var(--radius-sm);
+    z-index: 1;
 
-    &-index { width: 22px; height: 22px; flex-shrink: 0; }
-    &-time { width: 72px; height: 12px; }
-    &-badge { width: 32px; height: 16px; border-radius: $radius-full; margin-left: auto; }
-    &-text { width: 90%; height: 12px; margin-bottom: 6px; }
-    &-short { width: 55%; }
+    &-index { 
+      width: 22px; 
+      height: 22px; 
+      flex-shrink: 0; 
+      border-radius: $radius-sm;
+    }
+    &-time { 
+      width: 72px; 
+      height: 12px; 
+    }
+    &-badge { 
+      width: 32px; 
+      height: 16px; 
+      border-radius: $radius-full; 
+      margin-left: auto; 
+    }
+    &-text { 
+      width: 90%; 
+      height: 12px; 
+      margin-bottom: 6px; 
+    }
+    &-short { 
+      width: 55%; 
+    }
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
   }
 }
 
