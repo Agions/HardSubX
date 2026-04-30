@@ -1,7 +1,10 @@
 //! Shared utilities for the SubLens commands layer.
 
 use std::path::PathBuf;
+use std::time::Duration;
 use uuid::Uuid;
+use tokio::process::Command;
+use tokio::time::timeout;
 
 /// Parse frame rate from ffprobe's "30000/1001" fraction string.
 /// Returns fps as f64, or 30.0 as fallback.
@@ -23,34 +26,82 @@ pub fn parse_stream_from_ffmpeg_output(output: &str) -> (u32, u32, f64) {
     let mut width = 1920u32;
     let mut height = 1080u32;
     let mut fps = 30.0f64;
+    let mut parsed_from = "default";
 
     for line in output.lines() {
         if line.contains("Video:") {
+            parsed_from = "ffmpeg Video: line";
+
+            // Try multiple parsing strategies for width x height
             for part in line.split(',') {
                 let part = part.trim();
+
+                // Pattern 1: "1920x1080"
                 if part.contains('x') {
                     if let Some((w, h)) = part.split_once('x') {
-                        width = w.parse().unwrap_or_else(|_| {
-                            tracing::warn!("Failed to parse video width: {}", w);
+                        let w_trimmed = w.trim();
+                        let h_trimmed = h.trim();
+                        width = w_trimmed.parse().unwrap_or_else(|_| {
+                            tracing::warn!("Failed to parse video width: {}", w_trimmed);
                             1920
                         });
-                        height = h.parse().unwrap_or_else(|_| {
-                            tracing::warn!("Failed to parse video height: {}", h);
+                        height = h_trimmed.parse().unwrap_or_else(|_| {
+                            tracing::warn!("Failed to parse video height: {}", h_trimmed);
                             1080
                         });
                     }
                 }
+
+                // Pattern 2: "1920 x 1080" (with spaces)
+                if part.to_lowercase().contains("x") {
+                    let parts: Vec<&str> = part.split_whitespace().filter(|s| s.contains(|c: char| c.is_ascii_digit())).collect();
+                    if parts.len() >= 2 {
+                        if let (Ok(w), Ok(h)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                            width = w;
+                            height = h;
+                        }
+                    }
+                }
+            }
+
+            // Try multiple parsing strategies for fps
+            for part in line.split(',') {
+                let part = part.trim();
+
+                // Pattern 1: "29.97 fps" or "30 fps"
                 if part.contains("fps") {
                     let fps_candidate = part.split_whitespace().next().unwrap_or("30");
                     let numeric = fps_candidate.trim_end_matches(|c: char| !c.is_ascii_digit() && c != '.');
-                    fps = numeric.parse().unwrap_or_else(|_| {
-                        tracing::warn!("Failed to parse fps value: {}", numeric);
-                        30.0
-                    });
+                    if let Ok(f) = numeric.parse() {
+                        fps = f;
+                        parsed_from = "ffmpeg fps pattern";
+                    }
+                }
+
+                // Pattern 2: "[29.97]" or "(30)"
+                if part.starts_with('[') || part.starts_with('(') {
+                    let inner = part.trim_matches(|c: char| c == '[' || c == ']' || c == '(' || c == ')');
+                    if let Ok(f) = inner.parse() {
+                        fps = f;
+                        parsed_from = "ffmpeg bracket fps";
+                    }
                 }
             }
             break;
         }
+    }
+
+    if width == 1920 && height == 1080 {
+        tracing::warn!(
+            "Could not parse video resolution from ffmpeg output, using default 1920x1080. Parsed from: {}",
+            parsed_from
+        );
+    }
+    if fps == 30.0 {
+        tracing::warn!(
+            "Could not parse video fps from ffmpeg output, using default 30.0. Parsed from: {}",
+            parsed_from
+        );
     }
 
     (width, height, fps)
@@ -204,4 +255,30 @@ pub fn find_script(script_name: &str) -> Result<PathBuf, String> {
         "{} not found. Expected at: src-tauri/scripts/{}",
         script_name, script_name
     ))
+}
+
+/// Execute a command with a timeout, returning the output or a timeout error.
+///
+/// # Arguments
+/// * `cmd` - Command name
+/// * `args` - Command arguments
+/// * `timeout_duration` - Maximum duration to wait
+///
+/// # Returns
+/// * `Ok(Output)` if command succeeds within timeout
+/// * `Err(String)` if command fails or times out
+pub async fn run_command_with_timeout(
+    cmd: &str,
+    args: &[&str],
+    timeout_duration: Duration,
+) -> Result<std::process::Output, String> {
+    let output = timeout(
+        timeout_duration,
+        Command::new(cmd).args(args).output(),
+    )
+    .await
+    .map_err(|_| format!("Command '{}' timed out after {:?}", cmd, timeout_duration))?
+    .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?;
+
+    Ok(output)
 }

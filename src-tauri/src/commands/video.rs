@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use super::types::{BoundingBox, ROI};
 use super::utils::{
     parse_duration_from_ffmpeg_output, parse_fps_from_fraction, parse_stream_from_ffmpeg_output,
-    parse_time_to_seconds, uuid_v4, TempFileGuard,
+    parse_time_to_seconds, uuid_v4, TempFileGuard, run_command_with_timeout,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -308,18 +308,21 @@ pub async fn extract_cropped_frame_at_time(
     ));
     let _guard = TempFileGuard::new(output_path.clone()); // Auto-cleanup on function exit
 
-    let output = tokio::process::Command::new("ffmpeg")
-        .args([
+    // FFmpeg extraction with 30s timeout to prevent hanging
+    let output = run_command_with_timeout(
+        "ffmpeg",
+        &[
             "-ss", &format!("{}", timestamp_secs),
             "-i", &path,
             "-vf", &crop_filter,
             "-vframes", "1",
             "-q:v", "2",
-            output_path.to_str().unwrap(),
-        ])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
+            output_path.to_str().unwrap_or_default(),
+        ],
+        std::time::Duration::from_secs(30),
+    )
+    .await
+    .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -423,11 +426,17 @@ async fn extract_frame_at_time_impl(
 
     args.push(output_path.to_string_lossy().into_owned());
 
-    let output = tokio::process::Command::new("ffmpeg")
-        .args(&args)
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
+    // Use run_command_with_timeout for extract_frame_at_time as well
+    // Build string args for timeout helper
+    let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    let output = run_command_with_timeout(
+        "ffmpeg",
+        &args_str,
+        std::time::Duration::from_secs(30),
+    )
+    .await
+    .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
