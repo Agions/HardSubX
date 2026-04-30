@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, provide, ref } from 'vue'
+import { onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useSubtitleExtractor } from '@/composables/useSubtitleExtractor'
@@ -15,7 +15,6 @@ import BatchProcessView from '@/components/layout/BatchProcessView.vue'
 import SubtitleToast from '@/components/common/SubtitleToast.vue'
 import NotificationToast from '@/components/common/NotificationToast.vue'
 import { useSubtitleStore } from '@/stores/subtitle'
-import { watch } from 'vue'
 
 // Initialize theme
 useTheme()
@@ -78,7 +77,6 @@ onMounted(() => {
   })
 })
 
-import { onUnmounted } from 'vue'
 onUnmounted(() => {
   cleanupShortcuts()
 })

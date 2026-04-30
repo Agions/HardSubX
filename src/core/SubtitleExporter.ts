@@ -32,10 +32,6 @@ function _decompose(seconds: number) {
   return { h, m, s, remainder }
 }
 
-// Shared millisecond part formatting (used by SRT and VTT)
-function _msPart(seconds: number, padFn: (n: number) => string): string {
-  return padFn(Math.floor((seconds % 1) * 1000))
-}
 
 function pad2(n: number): string {
   return n.toString().padStart(2, '0')

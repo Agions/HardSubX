@@ -336,6 +336,8 @@ export function useSubtitleExtractor() {
    * ROI 预检测：计算 ROI 区域的像素方差和亮度，跳过无字幕的高概率帧。
    * 原理：字幕区域通常有中高频文字笔画（高方差），
    *       纯色背景/Logo/黑边方差极低。
+   * 
+   * 注意：此函数导出用于单元测试，内部直接使用导出版本。
    */
   function isRoiRegionLikelyEmpty(frameData: ImageData, roi: { x: number; y: number; width: number; height: number }): boolean {
     return _isRoiRegionLikelyEmpty(frameData, roi)

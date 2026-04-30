@@ -38,6 +38,23 @@ export interface OCRProcessingOptions {
   useGpu?: boolean
 }
 
+// ─── Tesseract Worker 接口 ───────────────────────────────────────
+interface TesseractWord {
+  text: string
+  confidence: number
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+}
+
+interface TesseractRecognizeResult {
+  data: { words: TesseractWord[] }
+}
+
+interface TesseractWorkerInterface {
+  terminate(): Promise<void>
+  setParameters(p: Record<string, string>): Promise<void>
+  recognize(img: string): Promise<TesseractRecognizeResult>
+}
+
 // ─── Tesseract 缓存 ───────────────────────────────────────────────
 let cachedTesseractModule: typeof import('tesseract.js') | null = null
 
@@ -87,7 +104,7 @@ export function useOCREngine() {
   const preprocessor = useImagePreprocessor()
   const calibrator = getCalibrator()
 
-  const worker = shallowRef<unknown>(null)
+  const worker = shallowRef<TesseractWorkerInterface | null>(null)
 
   // ─── 安全 ROI 裁剪 ───────────────────────────────────────────
   function safeExtractROI(
@@ -149,7 +166,7 @@ export function useOCREngine() {
         const Tesseract = cachedTesseractModule!
 
         if (worker.value) {
-          await (worker.value as { terminate: () => Promise<void> }).terminate()
+          await worker.value.terminate()
         }
 
         const workerNum = (options.useGpu ?? false) ? 2 : 1
@@ -163,7 +180,7 @@ export function useOCREngine() {
           gzip: true,
         })
 
-        await (worker.value as { setParameters: (p: Record<string, string>) => Promise<void> }).setParameters({
+        await worker.value.setParameters({
           tessedit_pageseg_mode: '3',
           preserve_interword_spaces: '1',
         })
@@ -206,16 +223,7 @@ export function useOCREngine() {
       ctx.putImageData(processedImage, 0, 0)
       const imageUrl = canvas.toDataURL('image/png')
 
-      const w = worker.value as {
-        recognize: (img: string) => Promise<{
-          data: { words: Array<{
-            text: string
-            confidence: number
-            bbox: { x0: number; y0: number; x1: number; y1: number }
-          }> }
-        }>
-      }
-      const result = await w.recognize(imageUrl)
+      const result = await worker.value.recognize(imageUrl)
 
       progress.value = 100
 
@@ -329,7 +337,7 @@ export function useOCREngine() {
   // ─── 终止 ─────────────────────────────────────────────────────
   async function terminate() {
     if (worker.value) {
-      await (worker.value as { terminate: () => Promise<void> }).terminate()
+      await worker.value.terminate()
       worker.value = null
       isReady.value = false
     }

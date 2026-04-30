@@ -250,6 +250,10 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     editHistory.value = []
     historyIndex.value = -1
   }
+
+  function toggleExportFormat(format: keyof ExportFormats) {
+    exportFormats.value[format] = !exportFormats.value[format]
+  }
   
   return {
     // State
@@ -286,6 +290,7 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     exportToFormat,
     clearAll,
     setConfidenceFilter,
-    batchDeleteLowConfidence
+    batchDeleteLowConfidence,
+    toggleExportFormat
   }
 })
