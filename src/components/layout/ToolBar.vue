@@ -12,33 +12,33 @@ import AboutDialog from '@/components/common/AboutDialog.vue'
 const projectStore = useProjectStore()
 const subtitleStore = useSubtitleStore()
 const { error: notifyError } = useNotification()
+const { currentTheme, toggleTheme } = useTheme()
+
+// Composable instances - created once at setup level for proper state sharing
+const fileOps = useFileOperations()
+const videoPlayer = useVideoPlayer()
+const { getVideoMetadata } = useVideoMetadata()
 
 const projectName = ref('未命名项目')
 const showAbout = ref(false)
 const isLoading = ref(false)
-const { currentTheme, toggleTheme } = useTheme()
 const openBatchProcess = inject<() => void>('openBatchProcess')
 
 async function handleOpenFile() {
   if (isLoading.value) return
 
   try {
-    const fileOps = useFileOperations()
-
     const filePath = await fileOps.openFileDialog('选择视频文件')
     if (!filePath) return
 
     isLoading.value = true
 
-    const { getVideoMetadata } = useVideoMetadata()
     const metadata = await getVideoMetadata(filePath)
-
     projectStore.setVideo(filePath, metadata)
 
     const filename = filePath.split('/').pop() || filePath.split('\\').pop() || 'video'
     projectName.value = filename.replace(/\.[^.]+$/, '')
 
-    const videoPlayer = useVideoPlayer()
     await videoPlayer.loadVideo(filePath)
 
   } catch (e) {
@@ -53,8 +53,6 @@ async function handleSave() {
   if (isLoading.value) return
 
   try {
-    const fileOps = useFileOperations()
-
     const subtitles = subtitleStore.subtitles.map(sub => ({
       id: sub.id,
       index: sub.index,
@@ -81,7 +79,6 @@ async function handleSave() {
     }, null, 2)
 
     await fileOps.writeTextFile(filePath, projectData)
-
 
   } catch (e) {
     console.error('[ToolBar] Failed to save project:', e)

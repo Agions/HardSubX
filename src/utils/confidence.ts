@@ -26,7 +26,10 @@ export function getConfidenceClass(confidence: number): string {
  */
 export function getConfidenceHeatmap(confidence: number): string {
   if (confidence >= CONFIDENCE_HIGH) {
-    return `linear-gradient(180deg, #22c55e ${Math.round(confidence * 100 - 85) * (100 / 15)}%, #16a34a 100%)`
+    // Map [CONFIDENCE_HIGH, 1.0] to [85%, 100%] - more confident = more green at top
+    const t = (confidence - CONFIDENCE_HIGH) / (1 - CONFIDENCE_HIGH)
+    const stopPosition = Math.round(85 + t * 15)
+    return `linear-gradient(180deg, #22c55e ${stopPosition}%, #16a34a 100%)`
   } else if (confidence >= CONFIDENCE_MID) {
     // Interpolate yellow to green
     const t = (confidence - CONFIDENCE_MID) / (CONFIDENCE_HIGH - CONFIDENCE_MID)

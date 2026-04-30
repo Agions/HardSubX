@@ -13,7 +13,7 @@ function getIcon(type: string) {
   }
 }
 
-function getProgress(n: any) {
+function getProgress(n: { duration?: number }) {
   // Auto-dismiss after 5 seconds
   if (n.duration === undefined) {
     return 5000

@@ -48,9 +48,7 @@ export const DEFAULT_PIPELINE_OPTIONS: PipelineOptions = {
 const SIMILARITY_CACHE_MAX_SIZE = 3000
 const SIMILARITY_CACHE_TRIM_TO  = 2500
 
-// Levenshtein similarity thresholds
-const TH_SIMILARITY_HIGH = 0.85  // split-merge threshold
-const TH_SIMILARITY_MID  = 0.80  // similar-merge threshold
+// Levenshtein similarity thresholds — used by stage3_mergeSimilar via opts.similarSimilarityThreshold
 
 // ─── Levenshtein 距离（带缓存 per-pipeline 实例）───────────────────────
 // 每个 SubtitlePipeline 实例拥有独立缓存，避免不同配置（threshold）互相干扰。
@@ -259,9 +257,12 @@ function stage4_computeEndTime(subs: SubtitleLite[]): SubtitleLite[] {
 
   return subs.map((sub, i) => {
     const next = subs[i + 1]
+    // 最后一条字幕的 endTime 用 startTime + 10（默认值），
+    // 避免原始 OCR 估算值不准确（如截断视频的 endTime 超出范围）
+    const defaultEndTime = sub.startTime + 10
     return {
       ...sub,
-      endTime: next ? Math.min(next.startTime, sub.startTime + 10) : sub.endTime,
+      endTime: next ? Math.min(next.startTime, defaultEndTime) : defaultEndTime,
     }
   })
 }
