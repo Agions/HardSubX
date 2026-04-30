@@ -23,7 +23,6 @@ const {
 
 const videoElement = ref<HTMLVideoElement | null>(null)
 const isDragOver = ref(false)
-const timelineRef = ref<HTMLElement | null>(null)
 const hoverTime = ref<number | null>(null)
 const hoverX = ref(0)
 
@@ -281,7 +280,6 @@ const hasVideo = computed(() => projectStore.hasVideo)
       <!-- Timeline -->
       <div
         class="timeline"
-        ref="timelineRef"
         @click="handleProgressClick"
         @mousemove="handleTimelineHover"
         @mouseleave="handleTimelineLeave"

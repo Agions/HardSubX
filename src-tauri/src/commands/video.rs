@@ -1,5 +1,6 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use super::types::{BoundingBox, ROI};
@@ -38,6 +39,14 @@ pub struct ExtractOptions {
 
 #[tauri::command]
 pub async fn get_video_metadata(path: String) -> Result<VideoMetadata, String> {
+    // Warn about paths with special characters that may cause issues
+    if path.contains(|c: char| c == '\'' || c == '"' || c == '$' || c == '`' || c == '\\') {
+        tracing::warn!(
+            "Video path contains shell-special characters which may cause issues: {}",
+            path
+        );
+    }
+    
     tracing::info!("Getting metadata for: {}", path);
 
     let path_obj = Path::new(&path);

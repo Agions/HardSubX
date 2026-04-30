@@ -242,7 +242,7 @@ fn extract_frame_ffmpeg(path: &str, frame_num: u64) -> Result<(), String> {
             "-i", path,
             "-vframes", "1",
             "-q:v", "2",
-            temp_path.to_str().unwrap()
+            temp_path.to_string_lossy().as_ref(),
         ])
         .output()
         .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
