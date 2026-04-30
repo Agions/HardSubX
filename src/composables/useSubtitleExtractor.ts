@@ -37,17 +37,33 @@ export function _isRoiRegionLikelyEmpty(
   threshold = 100,
 ): boolean {
   const { data, width, height } = frameData
-  const x0 = Math.floor((roi.x / 100) * width)
-  const y0 = Math.floor((roi.y / 100) * height)
-  const rw = Math.floor((roi.width / 100) * width)
-  const rh = Math.floor((roi.height / 100) * height)
+
+  // Convert percentage ROI to pixel coordinates with proper clamping
+  let x0 = Math.floor((roi.x / 100) * width)
+  let y0 = Math.floor((roi.y / 100) * height)
+  let rw = Math.floor((roi.width / 100) * width)
+  let rh = Math.floor((roi.height / 100) * height)
+
+  // Clamp ROI coordinates to valid image bounds [0, width/height]
+  // to prevent out-of-bounds access when ROI percentages are invalid
+  x0 = Math.max(0, Math.min(x0, width))
+  y0 = Math.max(0, Math.min(y0, height))
+  rw = Math.max(0, Math.min(rw, width - x0))
+  rh = Math.max(0, Math.min(rh, height - y0))
+
+  // Early exit if ROI is completely out of bounds
+  if (rw <= 0 || rh <= 0) return false
 
   let sum = 0
   let sumSq = 0
   let count = 0
 
-  for (let y = y0; y < Math.min(y0 + rh, height); y += 2) {
-    for (let x = x0; x < Math.min(x0 + rw, width); x += 2) {
+  // Use clamped end coordinates to prevent overflow
+  const xEnd = Math.min(x0 + rw, width)
+  const yEnd = Math.min(y0 + rh, height)
+
+  for (let y = y0; y < yEnd; y += 2) {
+    for (let x = x0; x < xEnd; x += 2) {
       const idx = (y * width + x) * 4
       // 灰度值 (Luminance formula)
       const gray = (data[idx] * 299 + data[idx + 1] * 587 + data[idx + 2] * 114) / 1000

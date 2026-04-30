@@ -61,9 +61,11 @@ class SimilarityCache {
     } else {
       this._map.set(key, { sim, ts: Date.now() })
       this._order.push(key)
+      // Batch delete when exceeding limit (removes multiple entries to avoid O(n) repeated shifts)
       if (this._map.size > 3000) {
-        const oldest = this._order.shift()
-        if (oldest) this._map.delete(oldest)
+        const deleteCount = this._map.size - 2500  // Keep 2500 entries for headroom
+        const removed = this._order.splice(0, deleteCount)
+        removed.forEach(k => this._map.delete(k))
       }
     }
   }
