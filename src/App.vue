@@ -60,21 +60,19 @@ function openBatchProcess() {
 }
 provide('openBatchProcess', openBatchProcess)
 
+function handleQuestionMark(e: KeyboardEvent) {
+  if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+    shortcutsHelpRef.value?.open()
+  }
+}
+
 onMounted(() => {
-  
   setupShortcuts()
-  
-  // Set up export shortcut callback
+
   setExportCallback(() => {
     exportDialogRef.value?.open()
   })
-  
-  // Register ? for shortcuts help
-  function handleQuestionMark(e: KeyboardEvent) {
-    if (e.key === '?' || (e.shiftKey && e.key === '/')) {
-      shortcutsHelpRef.value?.open()
-    }
-  }
+
   window.addEventListener('keydown', handleQuestionMark)
 })
 
