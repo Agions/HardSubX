@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useBatchProcessor, type BatchJob, type BatchOptions } from '@/composables/useBatchProcessor'
 
 const {
@@ -89,7 +89,7 @@ function getStatusText(status: BatchJob['status']): string {
   return JOB_STATUS_INFO[status as JobStatus]?.label ?? status
 }
 
-const s = computed(() => stats())
+const s = stats
 
 function formatETA(seconds: number | null): string {
   if (seconds === null) return ''
