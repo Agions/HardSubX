@@ -74,20 +74,21 @@ interface TesseractLoggerMessage {
  * Spatial grid deduplication for multi-pass OCR results.
  * Exported for unit testing; call through useOCREngine().mergeOCRResults in production.
  */
+const DEDUP_GRID_CELL_SIZE = 20  // pixels per grid cell for spatial deduplication
+
 export function _mergeOCRResults(resultsList: OCRResult[][]): OCRResult[] {
   const flat = resultsList.flat().sort((a, b) => b.confidence - a.confidence)
-  const cellSize = 20
   const grid = new Map<string, OCRResult>()
 
   for (const word of flat) {
     const cx = word.boundingBox.x + word.boundingBox.width / 2
     const cy = word.boundingBox.y + word.boundingBox.height / 2
-    const cellKey = `${Math.floor(cx / cellSize)},${Math.floor(cy / cellSize)}`
+    const cellKey = `${Math.floor(cx / DEDUP_GRID_CELL_SIZE)},${Math.floor(cy / DEDUP_GRID_CELL_SIZE)}`
 
     let isDuplicate = false
     for (let dx = -1; dx <= 1 && !isDuplicate; dx++) {
       for (let dy = -1; dy <= 1 && !isDuplicate; dy++) {
-        const neighborKey = `${Math.floor(cx / cellSize) + dx},${Math.floor(cy / cellSize) + dy}`
+        const neighborKey = `${Math.floor(cx / DEDUP_GRID_CELL_SIZE) + dx},${Math.floor(cy / DEDUP_GRID_CELL_SIZE) + dy}`
         const existing = grid.get(neighborKey)
         if (existing && existing.text === word.text) {
           isDuplicate = true
@@ -304,26 +305,25 @@ export function useOCREngine() {
     error.value = null
 
     try {
-      // Pass 1: 标准预处理
-      const r1 = await processImageData(imageData, config, {
-        preprocess: true,
-        preprocessMode: 'subtitle',
-        scaleFactor: 2.0,
-      })
-
-      // Pass 2: 更高缩放（小字）
-      const r2 = await processImageData(imageData, config, {
-        preprocess: true,
-        preprocessMode: 'subtitle',
-        scaleFactor: 3.0,
-      })
-
-      // Pass 3: 不同阈值
-      const r3 = await processImageData(imageData, config, {
-        preprocess: true,
-        preprocessMode: 'subtitle',
-        scaleFactor: 2.5,
-      })
+      // Run all passes concurrently — the Tesseract worker serializes internally,
+      // but Promise.all avoids blocking the event loop between passes.
+      const [r1, r2, r3] = await Promise.all([
+        processImageData(imageData, config, {
+          preprocess: true,
+          preprocessMode: 'subtitle',
+          scaleFactor: 2.0,
+        }),
+        processImageData(imageData, config, {
+          preprocess: true,
+          preprocessMode: 'subtitle',
+          scaleFactor: 3.0,
+        }),
+        processImageData(imageData, config, {
+          preprocess: true,
+          preprocessMode: 'subtitle',
+          scaleFactor: 2.5,
+        }),
+      ])
 
       // 空间网格合并（去重）
       const merged = mergeOCRResults([r1, r2, r3])

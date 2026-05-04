@@ -80,12 +80,13 @@ fn validate_path(path: &str) -> Result<(), String> {
         .canonicalize()
         .map_err(|e| format!("Invalid path {}: {}", path, e))?;
 
-    // For security, we only allow paths within the app's data directory or temp directory
-    let allowed_dirs = [
-        std::env::temp_dir(),
-        dirs::data_local_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-        dirs::document_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-    ];
+    // For security, restrict to the app's own data directories only.
+    // Never allow arbitrary user directories like ~/Documents.
+    // If data_local_dir is unavailable, fall back to temp only (never ".")
+    let allowed_dirs = match dirs::data_local_dir() {
+        Some(local) => vec![std::env::temp_dir(), local.join("SubLens")],
+        None => vec![std::env::temp_dir()],
+    };
 
     let is_allowed = allowed_dirs.iter().any(|allowed| {
         canonical.starts_with(allowed)

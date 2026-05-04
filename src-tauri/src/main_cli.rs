@@ -1,9 +1,9 @@
 //! SubLens CLI - Command Line Interface
 //! 
 //! Usage:
-//!   hardsubx-cli extract <video_file> [options]
-//!   hardsubx-cli preview <video_file> --frame <frame_number>
-//!   hardsubx-cli info <video_file>
+//!   sublens-cli extract <video_file> [options]
+//!   sublens-cli preview <video_file> --frame <frame_number>
+//!   sublens-cli info <video_file>
 
 use clap::{Parser, Subcommand};
 use std::path::Path;
@@ -11,7 +11,7 @@ use std::process::Command;
 
 #[derive(Parser)]
 #[command(
-    name = "hardsubx-cli",
+    name = "sublens-cli",
     version = "3.2.0",
     about = "SubLens v3.2.0 - Video Subtitle Extraction Tool"
 )]
@@ -96,9 +96,8 @@ fn main() {
             
             // CLI extraction requires native OCR integration
             // For now, provide guidance on using the GUI
-            println!("\n⚠️  Native CLI extraction requires PaddleOCR/EasyOCR integration.");
-            println!("   For full functionality, please use the GUI application.");
-            println!("   Or use Tesseract.js via the web interface.");
+            println!("\n⚠️  Native CLI extraction is not yet available in the Rust CLI.");
+            println!("   For full functionality, use the Node.js CLI: pnpm run hardsubx-cli -- --help");
         },
         
         Commands::Preview { video, frame, roi } => {
@@ -226,7 +225,7 @@ fn extract_frame_ffmpeg(path: &str, frame_num: u64) -> Result<(), String> {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    let temp_path = std::env::temp_dir().join(format!("hardsubx_preview_{}.png", now));
+    let temp_path = std::env::temp_dir().join(format!("sublens_preview_{}.png", now));
     
     // Get video FPS to calculate timestamp
     let fps = match get_video_info_ffprobe(path) {

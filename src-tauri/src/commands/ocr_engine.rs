@@ -401,7 +401,7 @@ pub async fn process_paddle_ocr(
 
     // Write image data to a proper PNG file using the image crate
     let temp_dir = std::env::temp_dir();
-    let image_path = temp_dir.join(format!("hardsubx_paddle_{}.png", uuid_v4()));
+    let image_path = temp_dir.join(format!("sublens_paddle_{}.png", uuid_v4()));
 
     // Encode raw RGBA bytes as a proper PNG file
     let img: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(width, height, image_data)
@@ -438,6 +438,9 @@ pub async fn process_paddle_ocr(
     let input_str = serde_json::to_string(&input_json)
         .map_err(|e| format!("Failed to serialize input JSON: {}", e))?;
 
+    // RAII guard ensures temp image is deleted even on error
+    let _guard = super::utils::TempFileGuard::new(image_path.clone());
+
     // Find Python and the paddle_ocr.py script
     let python = find_python_binary().await?;
     let script_path = find_script("paddle_ocr.py")?;
@@ -455,15 +458,15 @@ pub async fn process_paddle_ocr(
         .map_err(|e| format!("Failed to spawn Python process: {}. Is Python installed?", e))?;
 
     // Write input JSON to stdin (async)
-    if let Some(mut stdin) = child.stdin.take() {
-        tokio::io::AsyncWriteExt::write_all(&mut stdin, input_str.as_bytes())
-            .await
-            .map_err(|e| format!("Failed to write to Python stdin: {}", e))?;
-        // Explicitly shutdown stdin to signal EOF to Python process
-        tokio::io::AsyncWriteExt::shutdown(&mut stdin)
-            .await
-            .map_err(|e| format!("Failed to shutdown Python stdin: {}", e))?;
-    }
+    let mut stdin = child.stdin.take()
+        .ok_or_else(|| "Failed to capture Python stdin — process did not allocate stdin pipe".to_string())?;
+    tokio::io::AsyncWriteExt::write_all(&mut stdin, input_str.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to write to Python stdin: {}", e))?;
+    // Explicitly shutdown stdin to signal EOF to Python process
+    tokio::io::AsyncWriteExt::shutdown(&mut stdin)
+        .await
+        .map_err(|e| format!("Failed to shutdown Python stdin: {}", e))?;
 
     // Read stdout
     let output = child
@@ -471,8 +474,7 @@ pub async fn process_paddle_ocr(
         .await
         .map_err(|e| format!("Python process failed: {}", e))?;
 
-    // Clean up temp image (async)
-    let _ = tokio::fs::remove_file(&image_path).await;
+    // Guard auto-deletes temp image on scope exit — no manual cleanup needed
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -531,18 +533,16 @@ pub async fn process_paddle_ocr(
 
     let language_detected = paddle_result.get("language_detected")
         .and_then(|v| v.as_str())
-        .unwrap_or("ch")
+        .unwrap_or(&lang)  // Fall back to configured language, not hardcoded "ch"
         .to_string();
 
-    let elapsed_ms = paddle_result.get("elapsed_ms")
+    let processing_time_ms = paddle_result.get("elapsed_ms")
         .and_then(|v| v.as_u64())
         .unwrap_or_else(|| start.elapsed().as_millis() as u64);
 
-    let processing_time_ms = start.elapsed().as_millis() as u64;
-
     tracing::info!(
-        "PaddleOCR completed: {} words, avg_conf={:.2}, elapsed={}ms ({}ms total)",
-        items.len(), avg_confidence, elapsed_ms, processing_time_ms
+        "PaddleOCR completed: {} words, avg_conf={:.2}, elapsed={}ms",
+        items.len(), avg_confidence, processing_time_ms
     );
 
     Ok(OCRProcessResult {
@@ -631,13 +631,16 @@ pub async fn ocr_base64_image(
 
     // Write to temp file (async)
     let temp_path = std::env::temp_dir().join(format!(
-        "hardsubx_ocr_{}.png",
+        "sublens_ocr_{}.png",
         uuid_v4()
     ));
 
     tokio::fs::write(&temp_path, &image_bytes)
         .await
         .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // RAII guard ensures temp file is deleted even on error
+    let _guard = super::utils::TempFileGuard::new(temp_path.clone());
 
     // Process with Tesseract CLI
     let result = ocr_image_tesseract(
@@ -646,9 +649,6 @@ pub async fn ocr_base64_image(
         None,
     ).await;
 
-    // Cleanup temp file (async)
-    let _ = tokio::fs::remove_file(&temp_path).await;
-    
     match result {
         Ok(mut r) => {
             r.processing_time_ms = start.elapsed().as_millis() as u64;

@@ -26,82 +26,68 @@ pub fn parse_stream_from_ffmpeg_output(output: &str) -> (u32, u32, f64) {
     let mut width = 1920u32;
     let mut height = 1080u32;
     let mut fps = 30.0f64;
-    let mut parsed_from = "default";
 
     for line in output.lines() {
-        if line.contains("Video:") {
-            parsed_from = "ffmpeg Video: line";
-
-            // Try multiple parsing strategies for width x height
-            for part in line.split(',') {
-                let part = part.trim();
-
-                // Pattern 1: "1920x1080"
-                if part.contains('x') {
-                    if let Some((w, h)) = part.split_once('x') {
-                        let w_trimmed = w.trim();
-                        let h_trimmed = h.trim();
-                        width = w_trimmed.parse().unwrap_or_else(|_| {
-                            tracing::warn!("Failed to parse video width: {}", w_trimmed);
-                            1920
-                        });
-                        height = h_trimmed.parse().unwrap_or_else(|_| {
-                            tracing::warn!("Failed to parse video height: {}", h_trimmed);
-                            1080
-                        });
-                    }
-                }
-
-                // Pattern 2: "1920 x 1080" (with spaces)
-                if part.to_lowercase().contains("x") {
-                    let parts: Vec<&str> = part.split_whitespace().filter(|s| s.contains(|c: char| c.is_ascii_digit())).collect();
-                    if parts.len() >= 2 {
-                        if let (Ok(w), Ok(h)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
-                            width = w;
-                            height = h;
-                        }
-                    }
-                }
-            }
-
-            // Try multiple parsing strategies for fps
-            for part in line.split(',') {
-                let part = part.trim();
-
-                // Pattern 1: "29.97 fps" or "30 fps"
-                if part.contains("fps") {
-                    let fps_candidate = part.split_whitespace().next().unwrap_or("30");
-                    let numeric = fps_candidate.trim_end_matches(|c: char| !c.is_ascii_digit() && c != '.');
-                    if let Ok(f) = numeric.parse() {
-                        fps = f;
-                        parsed_from = "ffmpeg fps pattern";
-                    }
-                }
-
-                // Pattern 2: "[29.97]" or "(30)"
-                if part.starts_with('[') || part.starts_with('(') {
-                    let inner = part.trim_matches(|c: char| c == '[' || c == ']' || c == '(' || c == ')');
-                    if let Ok(f) = inner.parse() {
-                        fps = f;
-                        parsed_from = "ffmpeg bracket fps";
-                    }
-                }
-            }
-            break;
+        if !line.contains("Video:") {
+            continue;
         }
+
+        // Split once, reuse for both width/height and fps parsing
+        let parts: Vec<&str> = line.split(',').map(|p| p.trim()).collect();
+
+        // Parse width x height (first part containing 'x')
+        for part in &parts {
+            if part.contains('x') {
+                if let Some((w_str, h_str)) = part.split_once('x') {
+                    let w_trimmed = w_str.trim();
+                    let h_trimmed = h_str.trim();
+                    // Handle "1920 x 1080" (spaced) vs "1920x1080"
+                    let w_clean = w_trimmed.trim_end_matches(|c: char| !c.is_ascii_digit());
+                    let h_clean = h_trimmed.trim_start_matches(|c: char| !c.is_ascii_digit());
+                    width = w_clean.parse().unwrap_or_else(|_| {
+                        tracing::warn!("Failed to parse video width: {}", w_trimmed);
+                        1920
+                    });
+                    height = h_clean.parse().unwrap_or_else(|_| {
+                        tracing::warn!("Failed to parse video height: {}", h_trimmed);
+                        1080
+                    });
+                    break;
+                }
+            }
+        }
+
+        // Parse fps - look for "fps" keyword or bracketed number
+        for part in &parts {
+            // Pattern: "29.97 fps" or "30fps"
+            if part.contains("fps") {
+                let numeric = part.split_whitespace()
+                    .next()
+                    .unwrap_or("30")
+                    .trim_end_matches(|c: char| !c.is_ascii_digit() && c != '.');
+                if let Ok(f) = numeric.parse() {
+                    fps = f;
+                }
+                break;
+            }
+            // Pattern: "[29.97]" or "(30)"
+            if (part.starts_with('[') && part.ends_with(']'))
+                || (part.starts_with('(') && part.ends_with(')')) {
+                let inner = &part[1..part.len()-1];
+                if let Ok(f) = inner.parse() {
+                    fps = f;
+                    break;
+                }
+            }
+        }
+        break; // Only process the first "Video:" line
     }
 
     if width == 1920 && height == 1080 {
-        tracing::warn!(
-            "Could not parse video resolution from ffmpeg output, using default 1920x1080. Parsed from: {}",
-            parsed_from
-        );
+        tracing::warn!("Could not parse video resolution from ffmpeg output, using default 1920x1080");
     }
     if fps == 30.0 {
-        tracing::warn!(
-            "Could not parse video fps from ffmpeg output, using default 30.0. Parsed from: {}",
-            parsed_from
-        );
+        tracing::warn!("Could not parse video fps from ffmpeg output, using default 30.0");
     }
 
     (width, height, fps)
@@ -189,14 +175,14 @@ pub fn uuid_v4() -> String {
 
 /// Get the path to a temp directory for this application.
 pub fn temp_dir() -> PathBuf {
-    std::env::temp_dir().join("hardsubx")
+    std::env::temp_dir().join("sublens")
 }
 
 /// Build a temp file path under the application temp directory.
 pub fn temp_path(suffix: &str) -> PathBuf {
     let dir = temp_dir();
     let _ = std::fs::create_dir_all(&dir);
-    dir.join(format!("hardsubx_{}_{}", uuid_v4(), suffix))
+    dir.join(format!("sublens_{}_{}", uuid_v4(), suffix))
 }
 
 /// Find Python3/Python executable in PATH (async).
@@ -222,26 +208,23 @@ pub async fn find_python_binary() -> Result<PathBuf, String> {
 ///
 /// Checks in order:
 ///   1. `<exe_dir>/scripts/<name>`  (bundled with installed app)
-///   2. `src-tauri/scripts/<name>`   (development, cargo run)
-///   3. `<CARGO_MANIFEST_DIR>/../src-tauri/scripts/<name>`
-///   4. `/root/.openclaw/workspace/HardSubX/src-tauri/scripts/<name>`
+///   2. `<CARGO_MANIFEST_DIR>/../src-tauri/scripts/<name>` (development)
+///   3. `src-tauri/scripts/<name>`   (relative to cwd)
 pub fn find_script(script_name: &str) -> Result<PathBuf, String> {
-    let candidates: [Option<PathBuf>; 4] = [
+    let candidates: [Option<PathBuf>; 3] = [
         // Bundled with the app (relative to executable)
         std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(|p| p.to_path_buf()))
             .map(|p| p.join("scripts").join(script_name)),
-        // Development path (cargo run from src-tauri/)
+        // CARGO_MANIFEST_DIR path (development from repo root)
+        std::env::var("CARGO_MANIFEST_DIR").ok().map(|dir| {
+            PathBuf::from(&dir)
+                .parent()
+                .map(|p| p.join("src-tauri/scripts").join(script_name))
+        }).flatten(),
+        // Relative to cwd (cargo run from src-tauri/)
         Some(PathBuf::from("src-tauri/scripts").join(script_name)),
-        // CARGO_MANIFEST_DIR path
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| Some(p.join("src-tauri/scripts").join(script_name))),
-        // Absolute development path
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(|p| Some(p.join("src-tauri/scripts").join(script_name))),
     ];
 
     for candidate in candidates.into_iter().flatten() {

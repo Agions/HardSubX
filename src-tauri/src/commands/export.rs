@@ -83,15 +83,17 @@ impl ExportFormat {
     }
 }
 
+/// Format a timestamp with given separator and precision.
+/// separator: "," for SRT, "." for ASS/VTT
+/// precision: 3 for milliseconds, 2 for centiseconds
 fn format_timestamp(seconds: f64, separator: &str, precision: u32) -> String {
     let hours = (seconds / 3600.0).floor() as u32;
     let minutes = ((seconds % 3600.0) / 60.0).floor() as u32;
     let secs = (seconds % 60.0).floor() as u32;
     let fraction = ((seconds % 1.0) * 10_f64.powi(precision as i32)).floor() as u32;
-    if precision == 3 {
-        format!("{:02}:{:02}:{:02}{}{:03}", hours, minutes, secs, separator, fraction)
-    } else {
-        format!("{:02}:{:02}:{:02}{}{:02}", hours, minutes, secs, separator, fraction)
+    match precision {
+        3 => format!("{:02}:{:02}:{:02}{}{:03}", hours, minutes, secs, separator, fraction),
+        _ => format!("{:02}:{:02}:{:02}{}{:02}", hours, minutes, secs, separator, fraction),
     }
 }
 
@@ -108,36 +110,57 @@ fn format_timestamp_vtt(seconds: f64) -> String {
 }
 
 fn export_as_srt(subtitles: &[SubtitleItem]) -> String {
-    subtitles.iter()
-        .enumerate()
-        .map(|(i, sub)| {
-            let start = format_timestamp_srt(sub.start_time);
-            let end = format_timestamp_srt(sub.end_time);
-            format!("{}\n{} --> {}\n{}\n", i + 1, start, end, sub.text)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    // Avoid O(n) collect+join: pre-allocate and push in single pass.
+    let capacity = subtitles.iter().map(|s| {
+        10 + s.text.len()
+    }).sum();
+    let mut output = String::with_capacity(capacity);
+    for sub in subtitles {
+        let start = format_timestamp_srt(sub.start_time);
+        let end = format_timestamp_srt(sub.end_time);
+        use std::fmt::Write;
+        // SRT block format: index\nstart --> end\ntext\n\n (blank line between entries)
+        writeln!(output, "{}\n{} --> {}\n{}", sub.index, start, end, sub.text).unwrap();
+        output.push('\n'); // blank line separator
+    }
+    // Strip trailing blank line from the last entry
+    output.pop();
+    output
 }
 
 fn export_as_vtt(subtitles: &[SubtitleItem]) -> String {
-    let mut output = String::from("WEBVTT\n\n");
-    output.push_str(&subtitles.iter()
-        .enumerate()
-        .map(|(i, sub)| {
-            let start = format_timestamp_vtt(sub.start_time);
-            let end = format_timestamp_vtt(sub.end_time);
-            format!("{}\n{} --> {}\n{}\n", i + 1, start, end, sub.text)
-        })
-        .collect::<Vec<_>>()
-        .join("\n"));
+    let capacity: usize = subtitles.iter().map(|s| 10 + s.text.len()).sum();
+    let mut output = String::with_capacity(capacity + 8); // 8 = "WEBVTT\n\n"
+    use std::fmt::Write;
+    write!(output, "WEBVTT\n\n").unwrap();
+    for sub in subtitles {
+        let start = format_timestamp_vtt(sub.start_time);
+        let end = format_timestamp_vtt(sub.end_time);
+        writeln!(output, "{}\n{} --> {}\n{}\n", sub.index, start, end, sub.text).unwrap();
+    }
     output
 }
 
 fn export_as_txt(subtitles: &[SubtitleItem]) -> String {
+    // Single allocation: join texts with '\n' separator
     subtitles.iter()
-        .map(|sub| sub.text.clone())
+        .map(|sub| sub.text.as_str())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn export_as_sbv(subtitles: &[SubtitleItem]) -> String {
+    // SBV format: each entry is "start,end\ntext\n\n"
+    // Use single String with pre-allocated capacity
+    let capacity = subtitles.iter().map(|s| 30 + s.text.len()).sum();
+    let mut output = String::with_capacity(capacity);
+    use std::fmt::Write;
+    for sub in subtitles {
+        let start = format_timestamp_sbv(sub.start_time);
+        let end = format_timestamp_sbv(sub.end_time);
+        writeln!(output, "{},{}\n{}\n", start, end, sub.text).unwrap();
+    }
+    output
 }
 
 fn export_as_ass(subtitles: &[SubtitleItem]) -> String {
@@ -196,7 +219,7 @@ Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     output
 }
 
-fn export_as_json(subtitles: &[SubtitleItem]) -> String {
+fn export_as_json(subtitles: &[SubtitleItem]) -> Result<String, String> {
     let output = serde_json::json!({
         "version": "3.0",
         "generatedAt": chrono_lite_now(),
@@ -216,7 +239,8 @@ fn export_as_json(subtitles: &[SubtitleItem]) -> String {
             })
         }).collect::<Vec<_>>()
     });
-    serde_json::to_string_pretty(&output).unwrap_or_default()
+    serde_json::to_string_pretty(&output)
+        .map_err(|e| format!("JSON serialization failed: {}", e))
 }
 
 fn format_timestamp_sbv(seconds: f64) -> String {
@@ -248,23 +272,16 @@ fn export_as_lrc(subtitles: &[SubtitleItem]) -> String {
     output
 }
 
-fn export_as_sbv(subtitles: &[SubtitleItem]) -> String {
-    subtitles.iter()
-        .map(|sub| {
-            let start = format_timestamp_sbv(sub.start_time);
-            let end = format_timestamp_sbv(sub.end_time);
-            format!("{},{}\n{}\n", start, end, sub.text)
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 fn export_as_csv(subtitles: &[SubtitleItem]) -> String {
     let mut output = String::from("Index,StartTime,EndTime,StartFrame,EndFrame,Text,Confidence\n");
     for sub in subtitles {
-        // CSV escape: wrap text in quotes, double any quotes inside
-        let escaped = format!("\"{}\"",
-            sub.text.replace("\"", "\"\"")
+        // CSV escape per RFC 4180: wrap in quotes, double embedded quotes, also
+        // escape commas (they would otherwise split fields even inside quotes).
+        let escaped = format!(
+            "\"{}\"",
+            sub.text
+                .replace("\"", "\"\"")
+                .replace(",", "&#44;") // escape commas to prevent field splitting
         );
         output.push_str(&format!(
             "{},{:.3},{:.3},{},{},{},{:.3}\n",
@@ -301,7 +318,7 @@ pub async fn export_subtitles(
         ExportFormat::WebVTT => export_as_vtt(&subtitles),
         ExportFormat::ASS => export_as_ass(&subtitles),
         ExportFormat::SSA => export_as_ssa(&subtitles),
-        ExportFormat::JSON => export_as_json(&subtitles),
+        ExportFormat::JSON => export_as_json(&subtitles)?,
         ExportFormat::TXT => export_as_txt(&subtitles),
         ExportFormat::LRC => export_as_lrc(&subtitles),
         ExportFormat::SBV => export_as_sbv(&subtitles),

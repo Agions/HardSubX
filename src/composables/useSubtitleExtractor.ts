@@ -66,8 +66,8 @@ export function _isRoiRegionLikelyEmpty(
   for (let y = y0; y < yEnd; y += 2) {
     for (let x = x0; x < xEnd; x += 2) {
       const idx = (y * width + x) * 4
-      // 灰度值 (Luminance formula)
-      const gray = (data[idx] * 299 + data[idx + 1] * 587 + data[idx + 2] * 114) / 1000
+      // 灰度值 (ITU-R BT.601 luminosity method, result 0-255)
+      const gray = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2]
       sum += gray
       sumSq += gray * gray
       count++
@@ -109,6 +109,7 @@ export function useSubtitleExtractor() {
 
     const opts = projectStore.extractOptions
     const roi = projectStore.selectedROI
+    const frameInterval = opts.frameInterval
 
     // 初始化管道
     pipeline = new SubtitlePipeline({
@@ -150,7 +151,8 @@ export function useSubtitleExtractor() {
       // ── 暂停/停止检查 ──────────────────────────────────
       if (!isExtracting.value) break
       while (isPaused.value && isExtracting.value) {
-        await sleep(100)
+        const resumed = await sleepWithAbort(100)
+        if (!resumed) break  // was cancelled via stop
       }
       if (!isExtracting.value) break
 
@@ -227,10 +229,11 @@ export function useSubtitleExtractor() {
         if (result) {
           const fps = projectStore.videoMeta.fps
           const timestamp = frameIndex / fps
+          const frameDuration = Math.max(frameInterval / fps, 2)
 
           rawSubs.push({
             startTime: timestamp,
-            endTime: timestamp + 2,
+            endTime: timestamp + frameDuration,
             startFrame: frameIndex,
             endFrame: frameIndex,
             text: result.text,
@@ -257,15 +260,20 @@ export function useSubtitleExtractor() {
       // Deduplicate rawSubs to avoid key collisions in the index
       const seen = new Set<string>()
       const deduped = rawSubs.filter(r => {
-        const key = `${r.startTime}#${r.text}`
+        const nStart = Math.round(r.startTime * 1000) / 1000
+        const key = `${nStart}#${r.text}`
         if (seen.has(key)) return false
         seen.add(key)
         return true
       })
-      const rawIndex = new Map(deduped.map(r => [`${r.startTime}#${r.text}`, r]))
+      const rawIndex = new Map(deduped.map(r => {
+        const nStart = Math.round(r.startTime * 1000) / 1000
+        return [`${nStart}#${r.text}`, r]
+      }))
       subtitleStore.setSubtitles(
         cleaned.map((s, i) => {
-          const match = rawIndex.get(`${s.startTime}#${s.text}`)
+          const nStart = Math.round(s.startTime * 1000) / 1000
+          const match = rawIndex.get(`${nStart}#${s.text}`)
           // Use crypto.randomUUID() to avoid ID collisions in batch processing
           // Fallback format: sub-{startFrame}-{startTimeMs}-{cleanIndex}
           const id = match
@@ -329,8 +337,14 @@ export function useSubtitleExtractor() {
     subtitleStore.finishExtraction()
   }
 
-  function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+  /** Interruptible sleep — checks stop flag on each tick to allow cancellation. */
+  async function sleepWithAbort(ms: number): Promise<boolean> {
+    const interval = 100
+    for (let elapsed = 0; elapsed < ms; elapsed += interval) {
+      if (!isExtracting.value) return false  // cancelled
+      await new Promise(resolve => setTimeout(resolve, Math.min(interval, ms - elapsed)))
+    }
+    return true
   }
 
   /**

@@ -229,10 +229,10 @@ function getDepIcon(dep: { name: string, installed: boolean }) {
         </div>
 
         <div class="about-links">
-          <a href="https://github.com/Agions/HardSubX" target="_blank" class="about-link">
+          <a href="https://github.com/Agions/SubLens" target="_blank" class="about-link">
             GitHub
           </a>
-          <a href="https://github.com/Agions/HardSubX/issues" target="_blank" class="about-link">
+          <a href="https://github.com/Agions/SubLens/issues" target="_blank" class="about-link">
             问题反馈
           </a>
         </div>

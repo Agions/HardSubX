@@ -1,5 +1,5 @@
 {
-  "name": "hardsubx",
+  "name": "sublens",
   "version": "3.4.0",
   "description": "SubLens - Video Subtitle Extraction Tool",
   "type": "module",
@@ -42,10 +42,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Agions/HardSubX"
+    "url": "https://github.com/Agions/SubLens"
   },
   "bugs": {
-    "url": "https://github.com/Agions/HardSubX/issues"
+    "url": "https://github.com/Agions/SubLens/issues"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

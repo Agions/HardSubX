@@ -220,8 +220,9 @@ def main():
         return_words = config.get("return_words", True)
         roi = config.get("roi", None)
         
-        # Handle ROI cropping
+        # Handle ROI cropping — always clean up temp file even on error
         if image_path and roi:
+            tmp_path = None
             try:
                 from PIL import Image
                 img = Image.open(image_path)
@@ -234,27 +235,44 @@ def main():
                 cropped = img.crop((x, y, min(x+rw, w), min(y+rh, h)))
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                     cropped.save(tmp.name)
-                    image_path = tmp.name
+                    tmp_path = tmp.name
+                image_path = tmp_path
             except Exception as e:
+                # Clean up temp file on error before exiting
+                if tmp_path:
+                    try: os.unlink(tmp_path)
+                    except: pass
                 print(json.dumps({"success": False, "error": f"ROI cropping failed: {e}"}))
                 sys.exit(1)
-        
-        # Handle base64 image data
+
+        # Handle base64 image data — always clean up temp file even on error
         if not image_path and image_data_b64:
+            tmp_path = None
             try:
                 img_bytes = base64.b64decode(image_data_b64)
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                     tmp.write(img_bytes)
-                    image_path = tmp.name
+                    tmp_path = tmp.name
+                image_path = tmp_path
             except Exception as e:
+                if tmp_path:
+                    try: os.unlink(tmp_path)
+                    except: pass
                 print(json.dumps({"success": False, "error": f"Base64 decode failed: {e}"}))
                 sys.exit(1)
-        
-        if not image_path:
-            print(json.dumps({"success": False, "error": "No image_path or image_data provided"}))
-            sys.exit(1)
-        
+        # Track temp file so we clean it up regardless of success/failure.
+        # Only the base64 path is our temp file; ROI reuses the caller's image_path.
+        base64_temp_path = image_path if (not image_path and image_data_b64) else None
+
         result = run_paddleocr(image_path, language, use_gpu, return_words)
+
+        # Clean up base64 temp file (ROI temp is cleaned in its own except block)
+        if base64_temp_path and os.path.exists(base64_temp_path):
+            try:
+                os.unlink(base64_temp_path)
+            except Exception:
+                pass  # Best-effort
+
         print(json.dumps(result, ensure_ascii=False))
         return
     

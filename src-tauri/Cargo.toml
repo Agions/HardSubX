@@ -9,7 +9,7 @@ edition = "2021"
 default-run = "sublens-cli"
 
 [lib]
-name = "hardsubx_lib"
+name = "sublens_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[test]]

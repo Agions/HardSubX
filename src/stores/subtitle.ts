@@ -140,12 +140,13 @@ export const useSubtitleStore = defineStore('subtitle', () => {
     const index = _subtitleIndexMap.get(id)
     if (index === undefined) return
     subtitles.value.splice(index, 1)
-    // Re-index only from deleted position onward
+    // Incrementally update map and index fields instead of O(n) rebuild
+    _subtitleIndexMap.delete(id)
     for (let i = index; i < subtitles.value.length; i++) {
-      subtitles.value[i].index = i + 1
+      const sub = subtitles.value[i]
+      sub.index = i + 1
+      _subtitleIndexMap.set(sub.id, i)
     }
-    // Rebuild map (simpler than shifting entries for potentially many items)
-    _rebuildIndexMap()
     if (selectedId.value === id) selectedId.value = null
   }
   

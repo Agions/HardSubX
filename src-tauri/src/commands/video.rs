@@ -311,16 +311,19 @@ pub async fn extract_cropped_frame_at_time(
     let uuid = uuid_v4();
     let timestamp_ms = (timestamp_secs * 1000.0) as u64;
     let output_path = std::env::temp_dir().join(format!(
-        "hardsubx_crop_{}_{}.png",
+        "sublens_crop_{}_{}.png",
         timestamp_ms,
         uuid
     ));
     let _guard = TempFileGuard::new(output_path.clone()); // Auto-cleanup on function exit
 
     // FFmpeg extraction with 30s timeout to prevent hanging
+    // -y: overwrite output without asking (needed for automated pipelines)
+    // -nostdin: disable interactive mode (avoids deadlock in CI/non-TTY environments)
     let output = run_command_with_timeout(
         "ffmpeg",
         &[
+            "-y", "-nostdin",
             "-ss", &format!("{}", timestamp_secs),
             "-i", &path,
             "-vf", &crop_filter,
@@ -406,18 +409,30 @@ async fn extract_frame_at_time_impl(
     timestamp_secs: f64,
     crop_filter: Option<&str>,
 ) -> Result<String, String> {
+    // Canonicalize and validate the video path to prevent path traversal
+    let canonical = std::path::Path::new(path)
+        .canonicalize()
+        .map_err(|e| format!("Invalid video path '{}': {}", path, e))?;
+
+    if !canonical.is_file() {
+        return Err(format!("Video path '{}' is not a valid file", path));
+    }
+
     // 使用 UUID + 时间戳避免竞争条件
     let uuid = uuid_v4();
     let timestamp_ms = (timestamp_secs * 1000.0) as u64;
     let output_path = std::env::temp_dir().join(format!(
-        "hardsubx_frame_{}_{}.png",
+        "sublens_frame_{}_{}.png",
         timestamp_ms,
         uuid
     ));
     let _guard = TempFileGuard::new(output_path.clone()); // Auto-cleanup on function exit
 
-    // Build ffmpeg arguments
+    // Build ffmpeg arguments with security flags
+    // -y: overwrite output without asking
+    // -nostdin: disable interactive mode (avoids deadlock in CI/non-TTY)
     let mut args = vec![
+        "-y".to_string(), "-nostdin".to_string(),
         "-ss".to_string(),
         format!("{}", timestamp_secs),
         "-i".to_string(),

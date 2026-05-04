@@ -241,6 +241,12 @@ export function useVideoPlayer() {
       videoRef.value.pause()
       videoRef.value.src = ''
     }
+    // Release offscreen capture canvas to avoid memory leaks on resize
+    if (_captureCanvas.value) {
+      _captureCanvas.value.width = 0
+      _captureCanvas.value.height = 0
+      _captureCanvas.value = null
+    }
   })
 
   return {

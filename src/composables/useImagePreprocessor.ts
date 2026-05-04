@@ -109,30 +109,45 @@ export function enhanceContrast(imageData: ImageData, level: number): ImageData 
 /**
  * Simple box blur for noise reduction
  */
+// Precomputed neighbor offset lookup for boxBlur — cached per radius value.
+// Avoids O(w×h×(2r+1)²) per-call kernel rebuild.
+const _boxBlurKernelCache = new Map<number, [number, number][]>()
+
+function _getBoxBlurKernel(radius: number): [number, number][] {
+  if (!_boxBlurKernelCache.has(radius)) {
+    const deltas: [number, number][] = []
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        deltas.push([dy, dx])
+      }
+    }
+    _boxBlurKernelCache.set(radius, deltas)
+  }
+  return _boxBlurKernelCache.get(radius)!
+}
+
 export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
   const { data, width, height } = imageData
   const result = new ImageData(width, height)
-  
+  const kernel = _getBoxBlurKernel(radius)
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       let r = 0, g = 0, b = 0, a = 0, count = 0
-      
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const nx = x + dx
-          const ny = y + dy
-          
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const idx = (ny * width + nx) * 4
-            r += data[idx]
-            g += data[idx + 1]
-            b += data[idx + 2]
-            a += data[idx + 3]
-            count++
-          }
+
+      for (const [dy, dx] of kernel) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          const idx = (ny * width + nx) * 4
+          r += data[idx]
+          g += data[idx + 1]
+          b += data[idx + 2]
+          a += data[idx + 3]
+          count++
         }
       }
-      
+
       const idx = (y * width + x) * 4
       result.data[idx] = r / count
       result.data[idx + 1] = g / count
@@ -140,7 +155,7 @@ export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
       result.data[idx + 3] = a / count
     }
   }
-  
+
   return result
 }
 
@@ -148,6 +163,24 @@ export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
  * Adaptive thresholding - excellent for subtitles with transparent backgrounds
  * Converts to binary-like image for better OCR
  */
+// Precomputed block offset lookup for adaptiveThreshold — cached per blockSize.
+// Avoids O(w×h×blockSize²) per-call kernel rebuild.
+const _adaptiveBlockCache = new Map<number, [number, number][]>()
+
+function _getAdaptiveBlock(blockSize: number): [number, number][] {
+  if (!_adaptiveBlockCache.has(blockSize)) {
+    const halfBlock = Math.floor(blockSize / 2)
+    const deltas: [number, number][] = []
+    for (let by = -halfBlock; by <= halfBlock; by++) {
+      for (let bx = -halfBlock; bx <= halfBlock; bx++) {
+        deltas.push([by, bx])
+      }
+    }
+    _adaptiveBlockCache.set(blockSize, deltas)
+  }
+  return _adaptiveBlockCache.get(blockSize)!
+}
+
 export function adaptiveThreshold(imageData: ImageData, blockSize: number = 11, C: number = 2): ImageData {
   const { width, height } = imageData
   const result = new ImageData(width, height)
@@ -155,30 +188,26 @@ export function adaptiveThreshold(imageData: ImageData, blockSize: number = 11, 
   // First apply Gaussian blur to reduce noise
   const blurred = boxBlur(imageData, Math.floor(blockSize / 3))
   const blurredData = blurred.data
-  
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4
       const pixel = blurredData[idx]
-      
-      // Calculate local mean
+
+      // Calculate local mean using precomputed block offsets
       let sum = 0, count = 0
-      const halfBlock = Math.floor(blockSize / 2)
-      
-      for (let by = -halfBlock; by <= halfBlock; by++) {
-        for (let bx = -halfBlock; bx <= halfBlock; bx++) {
-          const nx = x + bx
-          const ny = y + by
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            sum += blurredData[(ny * width + nx) * 4]
-            count++
-          }
+      for (const [by, bx] of _getAdaptiveBlock(blockSize)) {
+        const nx = x + bx
+        const ny = y + by
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          sum += blurredData[(ny * width + nx) * 4]
+          count++
         }
       }
-      
+
       const localMean = sum / count
       const threshold = localMean - C
-      
+
       // Apply threshold
       const value = pixel > threshold ? 255 : 0
       result.data[idx] = value
@@ -187,7 +216,7 @@ export function adaptiveThreshold(imageData: ImageData, blockSize: number = 11, 
       result.data[idx + 3] = 255
     }
   }
-  
+
   return result
 }
 
@@ -200,76 +229,79 @@ function morphOpen(imageData: ImageData, size: number = 1): ImageData {
   return morphologicalDilate(eroded, size)
 }
 
-function morphologicalErode(imageData: ImageData, size: number): ImageData {
-  const { data, width, height } = imageData
-  const result = new ImageData(width, height)
-  
-  // Precompute (dy, dx) neighbor offsets
-  const neighborDeltas: [number, number][] = []
-  for (let dy = -size; dy <= size; dy++) {
-    for (let dx = -size; dx <= size; dx++) {
-      neighborDeltas.push([dy, dx])
-    }
-  }
-  
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let min = 255
-      
-      for (const [dy, dx] of neighborDeltas) {
-        const nx = x + dx
-        const ny = y + dy
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          const idx = (ny * width + nx) * 4
-          min = Math.min(min, data[idx])
+// Precomputed neighbor offset lookup tables for morphological operations.
+// Cached at module level to avoid O(n×k²) per-call re-computation where k=2*size+1.
+const _morphKernelCache = new Map<number, [number, number][]>()
+
+function _getMorphKernel(size: number): [number, number][] {
+    if (!_morphKernelCache.has(size)) {
+        const deltas: [number, number][] = []
+        for (let dy = -size; dy <= size; dy++) {
+            for (let dx = -size; dx <= size; dx++) {
+                deltas.push([dy, dx])
+            }
         }
-      }
-      
-      const ri = (y * width + x) * 4
-      result.data[ri] = min
-      result.data[ri + 1] = min
-      result.data[ri + 2] = min
-      result.data[ri + 3] = 255
+        _morphKernelCache.set(size, deltas)
     }
-  }
-  
-  return result
+    return _morphKernelCache.get(size)!
+}
+
+function morphologicalErode(imageData: ImageData, size: number): ImageData {
+    const { data, width, height } = imageData
+    const result = new ImageData(width, height)
+    const kernel = _getMorphKernel(size)
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let min = 255
+
+            for (const [dy, dx] of kernel) {
+                const nx = x + dx
+                const ny = y + dy
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    const idx = (ny * width + nx) * 4
+                    min = Math.min(min, data[idx])
+                }
+            }
+
+            const ri = (y * width + x) * 4
+            result.data[ri] = min
+            result.data[ri + 1] = min
+            result.data[ri + 2] = min
+            result.data[ri + 3] = 255
+        }
+    }
+
+    return result
 }
 
 function morphologicalDilate(imageData: ImageData, size: number): ImageData {
-  const { data, width, height } = imageData
-  const result = new ImageData(width, height)
-  
-  // Precompute (dy, dx) neighbor offsets
-  const neighborDeltas: [number, number][] = []
-  for (let dy = -size; dy <= size; dy++) {
-    for (let dx = -size; dx <= size; dx++) {
-      neighborDeltas.push([dy, dx])
-    }
-  }
-  
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let max = 0
-      
-      for (const [dy, dx] of neighborDeltas) {
-        const nx = x + dx
-        const ny = y + dy
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          const idx = (ny * width + nx) * 4
-          max = Math.max(max, data[idx])
+    const { data, width, height } = imageData
+    const result = new ImageData(width, height)
+    const kernel = _getMorphKernel(size)
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let max = 0
+
+            for (const [dy, dx] of kernel) {
+                const nx = x + dx
+                const ny = y + dy
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                    const idx = (ny * width + nx) * 4
+                    max = Math.max(max, data[idx])
+                }
+            }
+
+            const ri = (y * width + x) * 4
+            result.data[ri] = max
+            result.data[ri + 1] = max
+            result.data[ri + 2] = max
+            result.data[ri + 3] = 255
         }
-      }
-      
-      const ri = (y * width + x) * 4
-      result.data[ri] = max
-      result.data[ri + 1] = max
-      result.data[ri + 2] = max
-      result.data[ri + 3] = 255
     }
-  }
-  
-  return result
+
+    return result
 }
 
 /**

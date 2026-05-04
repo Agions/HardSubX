@@ -91,7 +91,7 @@ export function textSimilarity(a: string, b: string, cache?: SimilarityCache): n
     ? `${short.length}:${short}|${long.slice(0, 8)}`
     : `${short.length}:${short.slice(0, 4)}..${short.slice(-4)}|${long.slice(0, 8)}`
   const activeCache = cache ?? _fallbackCache
-  if (cacheKey) { const hit = activeCache.get(cacheKey); if (hit !== undefined) return hit }
+  const hit = activeCache.get(cacheKey); if (hit !== undefined) return hit
 
   const dp: number[] = Array.from({ length: long.length + 1 }, (_, i) => i)
   for (let i = 1; i <= short.length; i++) {
