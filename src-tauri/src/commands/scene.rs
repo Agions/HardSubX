@@ -23,6 +23,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Maximum frame size to prevent OOM attacks (16MB = 1920x1080 RGBA)
+const MAX_FRAME_SIZE_BYTES: usize = 16 * 1024 * 1024;
+
 use super::utils::{find_python_binary, find_script, parse_fps_from_fraction};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +168,15 @@ pub async fn calculate_frame_similarity(
     _width: u32,
     _height: u32,
 ) -> Result<f32, String> {
+    // Security: validate input size to prevent OOM attacks
+    if frame1_data.len() > MAX_FRAME_SIZE_BYTES || frame2_data.len() > MAX_FRAME_SIZE_BYTES {
+        return Err(format!(
+            "Frame data too large: {} bytes (max: {}). Refusing to process.",
+            frame1_data.len().max(frame2_data.len()),
+            MAX_FRAME_SIZE_BYTES
+        ));
+    }
+
     // Validate input
     if frame1_data.len() != frame2_data.len() {
         return Err("Frame data length mismatch".to_string());

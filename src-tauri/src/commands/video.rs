@@ -1,4 +1,4 @@
-use base64::Engine;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -346,7 +346,7 @@ pub async fn extract_cropped_frame_at_time(
         .await
         .map_err(|e| format!("Failed to read extracted frame: {}", e))?;
 
-    let base64_str = base64::engine::general_purpose::STANDARD.encode(&img_data);
+    let base64_str = STANDARD.encode(&img_data);
 
     Ok(format!("data:image/png;base64,{}", base64_str))
 }
@@ -472,7 +472,7 @@ async fn extract_frame_at_time_impl(
         .await
         .map_err(|e| format!("Failed to read extracted frame: {}", e))?;
 
-    let base64_str = base64::engine::general_purpose::STANDARD.encode(&img_data);
+    let base64_str = STANDARD.encode(&img_data);
 
     Ok(format!("data:image/png;base64,{}", base64_str))
 }

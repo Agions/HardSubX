@@ -16,8 +16,6 @@
     "lint:fix": "eslint src --ext .vue,.ts,.tsx --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "hardsubx-cli": "node cli/dist/extract.js",
-    "hardsubx:cli:build": "cd cli && npm run build",
     "postinstall": "pnpm dedupe"
   },
   "keywords": [

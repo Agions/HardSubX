@@ -1,12 +1,11 @@
 [package]
-name = "hardsubx"
+name = "sublens"
 version = "3.4.0"
-description = "Professional Video OCR Subtitle Extraction Tool"
+description = "SubLens - Professional Video OCR Subtitle Extraction Tool"
 authors = ["Agions"]
 license = "MIT"
-repository = "https://github.com/Agions/HardSubX"
+repository = "https://github.com/Agions/SubLens"
 edition = "2021"
-default-run = "sublens-cli"
 
 [lib]
 name = "sublens_lib"
@@ -15,10 +14,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[test]]
 name = "unit_tests"
 path = "tests/unit_tests.rs"
-
-[[bin]]
-name = "sublens-cli"
-path = "src/main_cli.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
@@ -34,7 +29,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-clap = { version = "4.0", features = ["derive"] }
 base64 = { version = "0.22", default-features = false, features = ["std"] }
 chrono = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
@@ -46,7 +40,7 @@ tauri-plugin-opener = "2.0"
 
 [profile.release]
 # panic = "abort"  # removed – caused exit code 101 on CI linker issues
+lto = "thin"
+opt-level = 3
 codegen-units = 16
-lto = false
-opt-level = 2
 strip = true

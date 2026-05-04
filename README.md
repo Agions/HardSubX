@@ -154,19 +154,11 @@ SubLens/
 │   ├── guide/
 │   │   ├── getting-started.md  # 安装与首次提取
 │   │   ├── architecture.md     # 项目架构与设计
-│   │   ├── cli.md              # CLI 参考
 │   │   ├── export-formats.md    # 导出格式详解
 │   │   ├── keyboard-shortcuts.md
 │   │   ├── faq.md              # 常见问题
 │   │   └── troubleshooting.md  # 故障排除
 │   └── .vitepress/             # VitePress 配置
-│
-└── cli/                        # Node.js CLI 工具
-    └── src/
-        ├── extract.ts
-        ├── formats.ts
-        └── index.ts
-```
 
 ---
 

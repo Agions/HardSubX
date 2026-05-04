@@ -54,26 +54,23 @@ const SIMILARITY_CACHE_TRIM_TO  = 2500
 
 class SimilarityCache {
   private _map = new Map<string, number>()
-  private _order: string[] = []  // insertion order for LRU
 
   get(key: string): number | undefined { return this._map.get(key) }
 
   set(key: string, sim: number): void {
-    if (this._map.has(key)) {
-      this._map.set(key, sim)
-    } else {
-      this._map.set(key, sim)
-      this._order.push(key)
-      // Batch delete when exceeding limit (removes multiple entries to avoid O(n) repeated shifts)
-      if (this._map.size > SIMILARITY_CACHE_MAX_SIZE) {
-        const deleteCount = this._map.size - SIMILARITY_CACHE_TRIM_TO  // Keep headroom entries
-        const removed = this._order.splice(0, deleteCount)
-        removed.forEach(k => this._map.delete(k))
+    // Batch trim when exceeding limit (O(1) amortized with Map's insertion order)
+    if (this._map.size >= SIMILARITY_CACHE_MAX_SIZE) {
+      // Map maintains insertion order in modern JS engines (V8, SpiderMonkey, etc.)
+      const keys = [...this._map.keys()]
+      const deleteCount = keys.length - SIMILARITY_CACHE_TRIM_TO
+      for (let i = 0; i < deleteCount; i++) {
+        this._map.delete(keys[i])
       }
     }
+    this._map.set(key, sim)
   }
 
-  clear(): void { this._map.clear(); this._order = [] }
+  clear(): void { this._map.clear() }
 }
 
 // module-level fallback cache for direct textSimilarity() calls (no pipeline instance)

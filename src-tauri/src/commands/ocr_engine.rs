@@ -1,3 +1,6 @@
+/// Maximum image size to prevent OOM (16MB)
+const MAX_IMAGE_SIZE_BYTES: usize = 16 * 1024 * 1024;
+
 //! OCR Engine unified interface.
 //!
 //! This module provides a **unified interface** for multiple OCR backends:
@@ -104,15 +107,24 @@ pub async fn process_image_ocr(
     config: OCREngineConfig,
 ) -> Result<OCRProcessResult, String> {
     tracing::info!("Processing image with {} OCR engine", config.engine);
-    
+
+    // Security: validate input size to prevent OOM
+    if image_data.len() > MAX_IMAGE_SIZE_BYTES {
+        return Err(format!(
+            "Image data too large: {} bytes (max: {}). Refusing to process.",
+            image_data.len(),
+            MAX_IMAGE_SIZE_BYTES
+        ));
+    }
+
     if image_data.is_empty() {
         return Err("Image data is empty".to_string());
     }
-    
+
     if width == 0 || height == 0 {
         return Err("Invalid image dimensions".to_string());
     }
-    
+
     // Dispatch to PaddleOCR if configured
     if config.engine == "paddle" {
         return process_paddle_ocr(
@@ -121,7 +133,7 @@ pub async fn process_image_ocr(
             config,
         ).await;
     }
-    
+
     Err(format!(
         "Native OCR processing not yet implemented for {} engine. Use Tesseract.js on frontend.",
         config.engine
@@ -139,17 +151,26 @@ pub async fn process_roi_ocr(
     roi_height: u32,
     config: OCREngineConfig,
 ) -> Result<OCRProcessResult, String> {
-    tracing::info!("Processing ROI ({}, {}) {}x{} with {} engine", 
+    tracing::info!("Processing ROI ({}, {}) {}x{} with {} engine",
         roi_x, roi_y, roi_width, roi_height, config.engine);
-    
+
+    // Security: validate input size to prevent OOM
+    if image_data.len() > MAX_IMAGE_SIZE_BYTES {
+        return Err(format!(
+            "Image data too large: {} bytes (max: {}). Refusing to process.",
+            image_data.len(),
+            MAX_IMAGE_SIZE_BYTES
+        ));
+    }
+
     if image_data.is_empty() {
         return Err("Image data is empty".to_string());
     }
-    
+
     if roi_width == 0 || roi_height == 0 {
         return Err("ROI has invalid dimensions".to_string());
     }
-    
+
     // Dispatch to PaddleOCR if configured
     if config.engine == "paddle" {
         return process_paddle_ocr(
@@ -158,7 +179,7 @@ pub async fn process_roi_ocr(
             config,
         ).await;
     }
-    
+
     Err(format!(
         "ROI-based OCR processing not yet implemented for {} engine",
         config.engine
@@ -389,6 +410,15 @@ pub async fn process_paddle_ocr(
         roi_width.unwrap_or(width), roi_height.unwrap_or(height),
         config.engine
     );
+
+    // Security: validate input size to prevent OOM
+    if image_data.len() > MAX_IMAGE_SIZE_BYTES {
+        return Err(format!(
+            "Image data too large: {} bytes (max: {}). Refusing to process.",
+            image_data.len(),
+            MAX_IMAGE_SIZE_BYTES
+        ));
+    }
 
     if image_data.is_empty() {
         return Err("Image data is empty".to_string());
