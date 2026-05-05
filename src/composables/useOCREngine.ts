@@ -133,7 +133,8 @@ export function useOCREngine() {
     const safeH = Math.max(1, Math.min(Math.floor(roiHeight), imageData.height - safeY))
 
     const roiImageData = new ImageData(safeW, safeH)
-    const { data: srcData, width: srcW } = imageData.data
+    const srcData = imageData.data
+    const srcW = imageData.width
     const dstData = roiImageData.data
     const dstRowLen = safeW * 4
 

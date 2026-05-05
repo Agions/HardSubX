@@ -161,9 +161,9 @@ function _getSquareKernel(
 }
 
 // 独立缓存（避免多操作间相互干扰）
-const _boxBlurKernelCache       = new Map<number, [number, number]>()
-const _adaptiveBlockKernelCache = new Map<number, [number, number]>()
-const _morphKernelCache         = new Map<number, [number, number]>()
+const _boxBlurKernelCache       = new Map<number, [number, number][]>()
+const _adaptiveBlockKernelCache = new Map<number, [number, number][]>()
+const _morphKernelCache         = new Map<number, [number, number][]>()
 
 export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
   const { data, width, height } = imageData
@@ -174,7 +174,7 @@ export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
     for (let x = 0; x < width; x++) {
       let r = 0, g = 0, b = 0, a = 0, count = 0
 
-      forEachNeighbor(x, y, width, height, kernel, (nx, ny, idx) => {
+      forEachNeighbor(x, y, width, height, kernel, (_nx, _ny, idx) => {
         r += data[idx]
         g += data[idx + 1]
         b += data[idx + 2]
