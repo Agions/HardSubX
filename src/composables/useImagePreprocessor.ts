@@ -109,6 +109,37 @@ export function enhanceContrast(imageData: ImageData, level: number): ImageData 
 /**
  * Simple box blur for noise reduction
  */
+// ─── 通用邻域遍历辅助函数 ──────────────────────────────────────────
+// 所有涉及 kernel/block 邻域操作的函数共享此工具：
+// - 自动边界检查（clamp 至图像范围）
+// - 减少每个操作中重复的 bounds-checking boilerplate
+// - 支持 accumulate 回调模式（min/max/sum 等）
+//
+// 使用示例：
+//   forEachNeighbor(x, y, width, height, kernel, (nx, ny) => { ... })
+//     ↓ 自动跳过越界邻居，调用回调
+//
+// 这个模式替代了原来每个操作各自的手动边界检查（nx >= 0 && ...）。
+
+type NeighborCallback = (nx: number, ny: number, srcIdx: number) => void
+
+function forEachNeighbor(
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  offsets: [number, number][],
+  callback: NeighborCallback,
+): void {
+  for (const [dx, dy] of offsets) {
+    const nx = centerX + dx
+    const ny = centerY + dy
+    if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+      callback(nx, ny, (ny * width + nx) * 4)
+    }
+  }
+}
+
 // Precomputed neighbor offset lookup for boxBlur — cached per radius value.
 // Avoids O(w×h×(2r+1)²) per-call kernel rebuild.
 const _boxBlurKernelCache = new Map<number, [number, number][]>()
@@ -135,18 +166,13 @@ export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
     for (let x = 0; x < width; x++) {
       let r = 0, g = 0, b = 0, a = 0, count = 0
 
-      for (const [dy, dx] of kernel) {
-        const nx = x + dx
-        const ny = y + dy
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          const idx = (ny * width + nx) * 4
-          r += data[idx]
-          g += data[idx + 1]
-          b += data[idx + 2]
-          a += data[idx + 3]
-          count++
-        }
-      }
+      forEachNeighbor(x, y, width, height, kernel, (nx, ny, idx) => {
+        r += data[idx]
+        g += data[idx + 1]
+        b += data[idx + 2]
+        a += data[idx + 3]
+        count++
+      })
 
       const idx = (y * width + x) * 4
       result.data[idx] = r / count
@@ -196,14 +222,10 @@ export function adaptiveThreshold(imageData: ImageData, blockSize: number = 11, 
 
       // Calculate local mean using precomputed block offsets
       let sum = 0, count = 0
-      for (const [by, bx] of _getAdaptiveBlock(blockSize)) {
-        const nx = x + bx
-        const ny = y + by
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          sum += blurredData[(ny * width + nx) * 4]
-          count++
-        }
-      }
+      forEachNeighbor(x, y, width, height, _getAdaptiveBlock(blockSize), (_nx, _ny, idx) => {
+        sum += blurredData[idx]
+        count++
+      })
 
       const localMean = sum / count
       const threshold = localMean - C
@@ -255,14 +277,9 @@ function morphologicalErode(imageData: ImageData, size: number): ImageData {
         for (let x = 0; x < width; x++) {
             let min = 255
 
-            for (const [dy, dx] of kernel) {
-                const nx = x + dx
-                const ny = y + dy
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                    const idx = (ny * width + nx) * 4
-                    min = Math.min(min, data[idx])
-                }
-            }
+            forEachNeighbor(x, y, width, height, kernel, (_nx, _ny, idx) => {
+              min = Math.min(min, data[idx])
+            })
 
             const ri = (y * width + x) * 4
             result.data[ri] = min
@@ -284,14 +301,9 @@ function morphologicalDilate(imageData: ImageData, size: number): ImageData {
         for (let x = 0; x < width; x++) {
             let max = 0
 
-            for (const [dy, dx] of kernel) {
-                const nx = x + dx
-                const ny = y + dy
-                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                    const idx = (ny * width + nx) * 4
-                    max = Math.max(max, data[idx])
-                }
-            }
+            forEachNeighbor(x, y, width, height, kernel, (_nx, _ny, idx) => {
+              max = Math.max(max, data[idx])
+            })
 
             const ri = (y * width + x) * 4
             result.data[ri] = max

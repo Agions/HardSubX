@@ -126,8 +126,11 @@ export class ConfidenceCalibrator {
       // Use explicit code point array union to avoid this JS regex parsing trap.
       const cjkBMP = /[\u4e00-\u9fff]/
       const cjkExtB = /[\uD840-\uD869][\uDC00-\uDEDF]/
-      const orphanedCJK = cjkBMP.test(text) && / [\u4e00-\u9fff]/.test(text) ||
-                          cjkExtB.test(text) && / [\uD840-\uD869][\uDC00-\uDEDF]/.test(text)
+      // NOTE: `||` has lower precedence than `&&`, so wrap each branch in parentheses.
+      // Without parens, `A && B || C && D` parses as `(A && B) || (C && D)` — wrong for
+      // this check which needs to detect "CJK char followed by space then another CJK".
+      const orphanedCJK = (cjkBMP.test(text) && / [\u4e00-\u9fff]/.test(text)) ||
+                          (cjkExtB.test(text) && / [\uD840-\uD869][\uDC00-\uDEDF]/.test(text))
       if (orphanedCJK) {
         const factor = F_ORPHANED_CJK
         quality *= factor

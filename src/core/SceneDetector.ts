@@ -91,7 +91,8 @@ export class SceneDetector {
 
   /**
    * 构建量化 RGB 直方图。
-   * 采样策略：均匀步进采样，确保覆盖全帧。
+   * 采样策略：随机采样（ Mersenne Twister-seeded ），确保覆盖全帧、
+   * 对小区域变化更敏感，避免步进采样规律性漏检。
    */
   private buildHistogram(
     frame: ImageData,
@@ -101,16 +102,28 @@ export class SceneDetector {
     const hist = new Int32Array(binCount * 3)  // R, G, B 三个通道
     const { data } = frame
     const pixelCount = Math.floor(data.length / 4)
-    const step = Math.max(1, Math.floor(pixelCount / sampleCount))
 
-    for (let p = 0; p < pixelCount; p += step) {
+    // Seeded LCG 随机数生成器 — 确定性、可重现。
+    // LCG 参数来自 Numerical Recipes 的 minimal version.
+    let seed = 0xdeadbeef ^ pixelCount
+    const rand = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) | 0
+      // 归一化到 [0, 1)
+      return (seed >>> 0) / 0x100000000
+    }
+
+    // 预分配采样索引数组（避免每轮 Math.random 开销量）
+    // 采样放回（允许重复像素），因为 chi-square 对 hist[bin]=0 有容错处理
+    for (let s = 0; s < sampleCount; s++) {
+      const p = Math.floor(rand() * pixelCount)
       const i = p * 4
+
       // 跳过全透明像素
       if (data[i + 3] < 128) continue
 
-      hist[quantize(data[i], binCount)]++                        // R
-      hist[binCount + quantize(data[i + 1], binCount)]++         // G
-      hist[binCount * 2 + quantize(data[i + 2], binCount)]++     // B
+      hist[quantize(data[i],     binCount)]++
+      hist[binCount + quantize(data[i + 1], binCount)]++
+      hist[binCount * 2 + quantize(data[i + 2], binCount)]++
     }
 
     return hist

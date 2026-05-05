@@ -76,9 +76,34 @@ class SimilarityCache {
 // module-level fallback cache for direct textSimilarity() calls (no pipeline instance)
 const _fallbackCache = new SimilarityCache()
 
+// Function-level memoization — caches (a,b) → similarity for all callers.
+// Shared across the entire module so any call with the same text pair is a cache hit.
+// Automatic LRU trim keeps it bounded.
+const _memo = new Map<string, number>()
+const _MEMO_MAX = 2000
+const _MEMO_TRIM_TO = 1500
+
+function _memoKey(a: string, b: string): string {
+  // Deterministic key regardless of argument order
+  return a.length <= b.length ? `${a.length}:${a}|${b}` : `${b.length}:${b}|${a}`
+}
+
+function _trimMemo() {
+  if (_memo.size <= _MEMO_MAX) return
+  // Delete oldest entries (Map preserves insertion order)
+  const keys = [..._memo.keys()]
+  const deleteCount = keys.length - _MEMO_TRIM_TO
+  for (let i = 0; i < deleteCount; i++) _memo.delete(keys[i])
+}
+
 export function textSimilarity(a: string, b: string, cache?: SimilarityCache): number {
   if (a === b) return 1
   if (!a.length || !b.length) return 0
+
+  // Try function-level memo first (fast path for repeated calls)
+  const memoKey = _memoKey(a, b)
+  const memoHit = _memo.get(memoKey)
+  if (memoHit !== undefined) return memoHit
 
   // 缓存键：短串在前 + 长度前缀（确保对称性）。
   // 短文本（≤4字）直接用完整文本；较长文本取首尾各4字确保唯一性。
@@ -88,7 +113,11 @@ export function textSimilarity(a: string, b: string, cache?: SimilarityCache): n
     ? `${short.length}:${short}|${long.slice(0, 8)}`
     : `${short.length}:${short.slice(0, 4)}..${short.slice(-4)}|${long.slice(0, 8)}`
   const activeCache = cache ?? _fallbackCache
-  const hit = activeCache.get(cacheKey); if (hit !== undefined) return hit
+  const hit = activeCache.get(cacheKey); if (hit !== undefined) {
+    _memo.set(memoKey, hit)
+    _trimMemo()
+    return hit
+  }
 
   const dp: number[] = Array.from({ length: long.length + 1 }, (_, i) => i)
   for (let i = 1; i <= short.length; i++) {
@@ -106,6 +135,8 @@ export function textSimilarity(a: string, b: string, cache?: SimilarityCache): n
   const sim = 1 - dist / Math.max(short.length, long.length)
 
   activeCache.set(cacheKey, sim)
+  _memo.set(memoKey, sim)
+  _trimMemo()
   return sim
 }
 
