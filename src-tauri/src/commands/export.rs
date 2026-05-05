@@ -109,32 +109,41 @@ fn format_timestamp_vtt(seconds: f64) -> String {
     format_timestamp(seconds, ".", 3)
 }
 
-fn export_as_srt(subtitles: &[SubtitleItem]) -> String {
-    // Pre-allocate with estimated per-subtitle overhead to avoid reallocations.
-    // Each entry: index (10) + timestamp (30) + text + 4 newlines + blank line.
-    let capacity = subtitles.iter().map(|s| 50 + s.text.len()).sum();
-    let mut output = String::with_capacity(capacity);
+// SBV uses identical timestamp format to WebVTT — reuse directly
+fn format_timestamp_sbv(seconds: f64) -> String {
+    format_timestamp_vtt(seconds)
+}
+
+/// Shared exporter for timed subtitle formats (SRT, VTT, SBV).
+/// Takes a timestamp formatter and optional header string.
+fn export_timed_entries<F>(
+    subtitles: &[SubtitleItem],
+    format_ts: F,
+    header: Option<&str>,
+) -> String
+where
+    F: Fn(f64) -> String,
+{
+    let cap = header.map_or(0, |h| h.len()) + subtitles.iter().map(|s| 50 + s.text.len()).sum();
+    let mut output = String::with_capacity(cap);
+    if let Some(h) = header {
+        output.push_str(h);
+    }
     for sub in subtitles {
-        let start = format_timestamp_srt(sub.start_time);
-        let end = format_timestamp_srt(sub.end_time);
+        let start = format_ts(sub.start_time);
+        let end = format_ts(sub.end_time);
         use std::fmt::Write;
-        // SRT format: index\nstart --> end\ntext\n\n (blank line between entries)
         writeln!(output, "{}\n{} --> {}\n{}\n", sub.index, start, end, sub.text).unwrap();
     }
     output
 }
 
+fn export_as_srt(subtitles: &[SubtitleItem]) -> String {
+    export_timed_entries(subtitles, format_timestamp_srt, None)
+}
+
 fn export_as_vtt(subtitles: &[SubtitleItem]) -> String {
-    let capacity: usize = subtitles.iter().map(|s| 10 + s.text.len()).sum();
-    let mut output = String::with_capacity(capacity + 8); // 8 = "WEBVTT\n\n"
-    use std::fmt::Write;
-    write!(output, "WEBVTT\n\n").unwrap();
-    for sub in subtitles {
-        let start = format_timestamp_vtt(sub.start_time);
-        let end = format_timestamp_vtt(sub.end_time);
-        writeln!(output, "{}\n{} --> {}\n{}\n", sub.index, start, end, sub.text).unwrap();
-    }
-    output
+    export_timed_entries(subtitles, format_timestamp_vtt, Some("WEBVTT\n\n"))
 }
 
 fn export_as_txt(subtitles: &[SubtitleItem]) -> String {
@@ -159,6 +168,23 @@ fn export_as_sbv(subtitles: &[SubtitleItem]) -> String {
     output
 }
 
+/// Shared exporter for ASS/SSA family formats — differs only in header template and dialogue prefix.
+fn export_ass_family(
+    subtitles: &[SubtitleItem],
+    header_template: &str,
+    dialogue_prefix: &str,
+) -> String {
+    let mut output = String::from(header_template);
+    for sub in subtitles {
+        let start = format_timestamp_ass(sub.start_time);
+        let end = format_timestamp_ass(sub.end_time);
+        let text = escape_ass_text(&sub.text);
+        output.push_str(&format!("Dialogue: {prefix},{start},{end},Default,,0,0,0,,{text}\n",
+            prefix = dialogue_prefix, start = start, end = end, text = text));
+    }
+    output
+}
+
 fn export_as_ass(subtitles: &[SubtitleItem]) -> String {
     let header = r#"[Script Info]
 Title: SubLens Export
@@ -173,14 +199,7 @@ Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 "#;
-    let mut output = String::from(header);
-    for sub in subtitles {
-        let start = format_timestamp_ass(sub.start_time);
-        let end = format_timestamp_ass(sub.end_time);
-        let text = escape_ass_text(&sub.text);
-        output.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n", start, end, text));
-    }
-    output
+    export_ass_family(subtitles, header, "0")
 }
 
 fn escape_ass_text(text: &str) -> String {
@@ -205,14 +224,7 @@ Style: Default,Arial,20,16777215,65535,255,0,-1,0,1,2,2,2,10,10,10,0,1
 [Events]
 Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 "#;
-    let mut output = String::from(header);
-    for sub in subtitles {
-        let start = format_timestamp_ass(sub.start_time);
-        let end = format_timestamp_ass(sub.end_time);
-        let text = escape_ass_text(&sub.text);
-        output.push_str(&format!("Dialogue: Marked=0,{},{},Default,,0000,0000,0000,,{}\n", start, end, text));
-    }
-    output
+    export_ass_family(subtitles, header, "Marked=0")
 }
 
 fn export_as_json(subtitles: &[SubtitleItem]) -> Result<String, String> {
@@ -237,12 +249,6 @@ fn export_as_json(subtitles: &[SubtitleItem]) -> Result<String, String> {
     });
     serde_json::to_string_pretty(&output)
         .map_err(|e| format!("JSON serialization failed: {}", e))
-}
-
-fn format_timestamp_sbv(seconds: f64) -> String {
-    // Reuse factory — format is identical to format_timestamp(seconds, ".", 3):
-    // HH:MM:SS.mmm (separator=".", precision=3 for milliseconds)
-    format_timestamp(seconds, ".", 3)
 }
 
 fn export_as_lrc(subtitles: &[SubtitleItem]) -> String {
