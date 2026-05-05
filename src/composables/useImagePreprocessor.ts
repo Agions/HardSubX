@@ -140,27 +140,35 @@ function forEachNeighbor(
   }
 }
 
-// Precomputed neighbor offset lookup for boxBlur — cached per radius value.
-// Avoids O(w×h×(2r+1)²) per-call kernel rebuild.
-const _boxBlurKernelCache = new Map<number, [number, number][]>()
+// ─── 通用 Kernel 缓存工厂 ─────────────────────────────────────────
+// 三个操作（boxBlur / adaptiveThreshold / morph）使用相同结构的 kernel 生成逻辑，
+// 仅参数名和缓存名不同。统一为 _getSquareKernel(radius, cache) 消除重复。
 
-function _getBoxBlurKernel(radius: number): [number, number][] {
-  if (!_boxBlurKernelCache.has(radius)) {
+function _getSquareKernel(
+  radius: number,
+  cache: Map<number, [number, number][]>,
+): [number, number][] {
+  if (!cache.has(radius)) {
     const deltas: [number, number][] = []
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         deltas.push([dy, dx])
       }
     }
-    _boxBlurKernelCache.set(radius, deltas)
+    cache.set(radius, deltas)
   }
-  return _boxBlurKernelCache.get(radius)!
+  return cache.get(radius)!
 }
+
+// 独立缓存（避免多操作间相互干扰）
+const _boxBlurKernelCache       = new Map<number, [number, number]>()
+const _adaptiveBlockKernelCache = new Map<number, [number, number]>()
+const _morphKernelCache         = new Map<number, [number, number]>()
 
 export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
   const { data, width, height } = imageData
   const result = new ImageData(width, height)
-  const kernel = _getBoxBlurKernel(radius)
+  const kernel = _getSquareKernel(radius, _boxBlurKernelCache)
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -189,22 +197,9 @@ export function boxBlur(imageData: ImageData, radius: number = 1): ImageData {
  * Adaptive thresholding - excellent for subtitles with transparent backgrounds
  * Converts to binary-like image for better OCR
  */
-// Precomputed block offset lookup for adaptiveThreshold — cached per blockSize.
-// Avoids O(w×h×blockSize²) per-call kernel rebuild.
-const _adaptiveBlockCache = new Map<number, [number, number][]>()
-
-function _getAdaptiveBlock(blockSize: number): [number, number][] {
-  if (!_adaptiveBlockCache.has(blockSize)) {
-    const halfBlock = Math.floor(blockSize / 2)
-    const deltas: [number, number][] = []
-    for (let by = -halfBlock; by <= halfBlock; by++) {
-      for (let bx = -halfBlock; bx <= halfBlock; bx++) {
-        deltas.push([by, bx])
-      }
-    }
-    _adaptiveBlockCache.set(blockSize, deltas)
-  }
-  return _adaptiveBlockCache.get(blockSize)!
+// _getAdaptiveKernel uses _getSquareKernel internally (blockSize → halfBlock)
+function _getAdaptiveKernel(blockSize: number): [number, number][] {
+  return _getSquareKernel(Math.floor(blockSize / 2), _adaptiveBlockKernelCache)
 }
 
 export function adaptiveThreshold(imageData: ImageData, blockSize: number = 11, C: number = 2): ImageData {
@@ -222,7 +217,7 @@ export function adaptiveThreshold(imageData: ImageData, blockSize: number = 11, 
 
       // Calculate local mean using precomputed block offsets
       let sum = 0, count = 0
-      forEachNeighbor(x, y, width, height, _getAdaptiveBlock(blockSize), (_nx, _ny, idx) => {
+      forEachNeighbor(x, y, width, height, _getAdaptiveKernel(blockSize), (_nx, _ny, idx) => {
         sum += blurredData[idx]
         count++
       })
@@ -251,69 +246,46 @@ function morphOpen(imageData: ImageData, size: number = 1): ImageData {
   return morphologicalDilate(eroded, size)
 }
 
-// Precomputed neighbor offset lookup tables for morphological operations.
-// Cached at module level to avoid O(n×k²) per-call re-computation where k=2*size+1.
-const _morphKernelCache = new Map<number, [number, number][]>()
-
+// _getMorphKernel uses _getSquareKernel internally
 function _getMorphKernel(size: number): [number, number][] {
-    if (!_morphKernelCache.has(size)) {
-        const deltas: [number, number][] = []
-        for (let dy = -size; dy <= size; dy++) {
-            for (let dx = -size; dx <= size; dx++) {
-                deltas.push([dy, dx])
-            }
-        }
-        _morphKernelCache.set(size, deltas)
+  return _getSquareKernel(size, _morphKernelCache)
+}
+
+// ─── 通用形态学操作工厂 ────────────────────────────────────────────
+// erode 和 dilate 仅 accumulate 方式不同（min vs max），提取通用函数消除重复。
+
+function _morphologicalOp(
+  imageData: ImageData,
+  size: number,
+  accumulate: (current: number, neighbor: number) => number,
+  initial: number,
+): ImageData {
+  const { data, width, height } = imageData
+  const result = new ImageData(width, height)
+  const kernel = _getMorphKernel(size)
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let acc = initial
+      forEachNeighbor(x, y, width, height, kernel, (_nx, _ny, idx) => {
+        acc = accumulate(acc, data[idx])
+      })
+      const ri = (y * width + x) * 4
+      result.data[ri] = acc
+      result.data[ri + 1] = acc
+      result.data[ri + 2] = acc
+      result.data[ri + 3] = 255
     }
-    return _morphKernelCache.get(size)!
+  }
+  return result
 }
 
 function morphologicalErode(imageData: ImageData, size: number): ImageData {
-    const { data, width, height } = imageData
-    const result = new ImageData(width, height)
-    const kernel = _getMorphKernel(size)
-
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            let min = 255
-
-            forEachNeighbor(x, y, width, height, kernel, (_nx, _ny, idx) => {
-              min = Math.min(min, data[idx])
-            })
-
-            const ri = (y * width + x) * 4
-            result.data[ri] = min
-            result.data[ri + 1] = min
-            result.data[ri + 2] = min
-            result.data[ri + 3] = 255
-        }
-    }
-
-    return result
+  return _morphologicalOp(imageData, size, Math.min, 255)
 }
 
 function morphologicalDilate(imageData: ImageData, size: number): ImageData {
-    const { data, width, height } = imageData
-    const result = new ImageData(width, height)
-    const kernel = _getMorphKernel(size)
-
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            let max = 0
-
-            forEachNeighbor(x, y, width, height, kernel, (_nx, _ny, idx) => {
-              max = Math.max(max, data[idx])
-            })
-
-            const ri = (y * width + x) * 4
-            result.data[ri] = max
-            result.data[ri + 1] = max
-            result.data[ri + 2] = max
-            result.data[ri + 3] = 255
-        }
-    }
-
-    return result
+  return _morphologicalOp(imageData, size, Math.max, 0)
 }
 
 /**
