@@ -255,20 +255,20 @@ export function useSubtitleExtractor() {
     if (opts.mergeSubtitles && rawSubs.length > 0) {
       const cleaned = pipeline.process(rawSubs)
 
-      // 转换回 SubtitleItem（需要 id, index 等完整字段）
-      // Build index once — O(n), then each map lookup is O(1) instead of O(n)
-      // Deduplicate rawSubs to avoid key collisions in the index
-      // _normKey: stable normalized key for time-based dedup (avoids repeated Math.round)
+      // Build index in one pass — O(n), deduplicate + Map construction combined
+      // Avoids calling _normKey twice (filter loop + Map loop)
       const _normKey = (r: { startTime: number; text: string }) =>
         `${(Math.round(r.startTime * 1000) / 1000).toFixed(3)}#${r.text}`
       const seen = new Set<string>()
-      const deduped = rawSubs.filter(r => {
+      const deduped: SubtitleLite[] = []
+      const rawIndex = new Map<string, SubtitleLite>()
+      for (const r of rawSubs) {
         const key = _normKey(r)
-        if (seen.has(key)) return false
+        if (seen.has(key)) continue
         seen.add(key)
-        return true
-      })
-      const rawIndex = new Map(deduped.map(r => [_normKey(r), r]))
+        deduped.push(r)
+        rawIndex.set(key, r)
+      }
       subtitleStore.setSubtitles(
         cleaned.map((s, i) => {
           const match = rawIndex.get(_normKey(s))
