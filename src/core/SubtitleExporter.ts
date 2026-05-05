@@ -32,7 +32,6 @@ function _decompose(seconds: number) {
   return { h, m, s, remainder }
 }
 
-
 function pad2(n: number): string {
   return n.toString().padStart(2, '0')
 }
@@ -41,31 +40,40 @@ function pad3(n: number): string {
   return n.toString().padStart(3, '0')
 }
 
-function tsSRT(seconds: number): string {
-  const { h, m, s, remainder } = _decompose(seconds)
-  return `${pad2(h)}:${pad2(m)}:${pad2(s)},${pad3(Math.floor(remainder * 1000))}`
+// ─── 通用时间戳格式化工厂 ─────────────────────────────────────────
+// tsSRT / tsVTT / tsSBV / tsASS / tsSSA 五个函数主体完全相同，
+// 仅组件间分隔符和小数精度不同。统一为 tsFormat() 消除重复。
+//
+// tsFormat(subdivs, fracDiv, fracPad)
+//   subdivs: [hSep, mSep, sSep]  — 组件间分隔符
+//   fracDiv: 除数（1000=ms, 100=cs, 30=frames）
+//   fracPad: 小数位数填充函数（pad2 或 pad3）
+//
+// Examples:
+//   tsSRT  = tsFormat(':', 1000, pad3) → "00:01:23,456"
+//   tsVTT  = tsFormat(':', 1000, pad3) → "00:01:23.456"  (VTT uses '.')
+//   tsSBV  = tsFormat(':', 1000, pad3) → "00:01:23,456"
+//   tsASS  = tsFormat(':', 100,  pad2) → "0:01:23.45"
+//   tsSSA  = tsFormat(':', 30,   pad2) → "0:01:23:12"    (frames@30fps)
+
+function tsFormat(
+  hSep: string,
+  mSep: string,
+  sSep: string,
+  fracDiv: number,
+  fracPad: (n: number) => string,
+): (seconds: number) => string {
+  return (seconds: number) => {
+    const { h, m, s, remainder } = _decompose(seconds)
+    return `${pad2(h)}${hSep}${pad2(m)}${mSep}${pad2(s)}${sSep}${fracPad(Math.floor(remainder * fracDiv))}`
+  }
 }
 
-function tsVTT(seconds: number): string {
-  const { h, m, s, remainder } = _decompose(seconds)
-  return `${pad2(h)}:${pad2(m)}:${pad2(s)}.${pad3(Math.floor(remainder * 1000))}`
-}
-
-function tsASS(seconds: number): string {
-  const { h, m, s, remainder } = _decompose(seconds)
-  return `${h}:${pad2(m)}:${pad2(s)}.${pad2(Math.floor(remainder * 100))}`
-}
-
-// SBV uses comma separator instead of period for milliseconds (SRT-style with comma)
-function tsSBV(seconds: number): string {
-  const { h, m, s, remainder } = _decompose(seconds)
-  return `${pad2(h)}:${pad2(m)}:${pad2(s)},${pad3(Math.floor(remainder * 1000))}`
-}
-
-function tsSSA(seconds: number): string {
-  const { h, m, s, remainder } = _decompose(seconds)
-  return `${pad2(h)}:${pad2(m)}:${pad2(s)}:${pad2(Math.floor(remainder * 30))}`
-}
+const tsSRT = tsFormat(':', ':', ',', 1000, pad3)  // HH:MM:SS,mmm
+const tsVTT = tsFormat(':', ':', '.', 1000, pad3)   // HH:MM:SS.mmm
+const tsSBV = tsFormat(':', ':', ',', 1000, pad3)   // HH:MM:SS,mmm
+const tsASS = tsFormat(':', ':', '.', 100, pad2)    // H:MM:SS.cc
+const tsSSA = tsFormat(':', ':', ':', 30, pad2)     // H:MM:SS:ff (30fps frames)
 
 // ─── 格式化函数 ─────────────────────────────────────────────────────
 function formatSRT(subs: SubtitleItem[]): string {

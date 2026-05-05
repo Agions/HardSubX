@@ -192,7 +192,21 @@ export function useSubtitleExtractor() {
 
       // ── OCR 识别 ─────────────────────────────────────
       try {
+        // 统一的校准+验证辅助函数 — 消除多通道/单通道 OCR 分支重复代码
         let result: { text: string; confidence: number } | null = null
+        const _calibrateAndValidate = (
+          text: string,
+          confidence: number,
+        ): { text: string; confidence: number } | null => {
+          const trimmed = text.trim()
+          if (!trimmed) return null
+          const lang = opts.languages[0]
+          const { confidence: calibrated } = calibrator.calibrateEnhanced(
+            trimmed, confidence, langToScript(lang),
+          )
+          if (calibrated < opts.confidenceThreshold) return null
+          return { text: trimmed, confidence: calibrated }
+        }
 
         if (opts.multiPass && opts.postProcess) {
           // 多通道 OCR
@@ -200,30 +214,16 @@ export function useSubtitleExtractor() {
             multiPass: true,
             preprocessMode: 'subtitle',
           })
-
           const mergedWords = passes ?? []
           const fullText = mergedWords.map(r => r.text).join(' ')
           const avgConf = mergedWords.length > 0
             ? mergedWords.reduce((s, r) => s + r.confidence, 0) / mergedWords.length
             : 0
-
-          // 校准置信度
-          const lang = opts.languages[0]
-          const { confidence: calibrated } = calibrator.calibrateEnhanced(fullText, avgConf, langToScript(lang))
-
-          if (fullText.trim().length > 0 && calibrated >= opts.confidenceThreshold) {
-            result = { text: fullText.trim(), confidence: calibrated }
-          }
+          result = _calibrateAndValidate(fullText, avgConf)
         } else {
           // 单次 OCR
           const singleResult = await ocrEngine.processROI(frameData, roi, ocrConfig)
-          if (singleResult.text.trim().length > 0 && singleResult.confidence >= opts.confidenceThreshold) {
-            const lang = opts.languages[0]
-            const { confidence: calibrated } = calibrator.calibrateEnhanced(
-              singleResult.text, singleResult.confidence, langToScript(lang)
-            )
-            result = { text: singleResult.text.trim(), confidence: calibrated }
-          }
+          result = _calibrateAndValidate(singleResult.text, singleResult.confidence)
         }
 
         if (result) {
