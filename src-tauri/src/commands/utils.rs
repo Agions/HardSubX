@@ -5,7 +5,7 @@ use std::time::Duration;
 use uuid::Uuid;
 use tokio::process::Command;
 use tokio::time::timeout;
-use once_cell::sync::LazyLock;
+use std::sync::LazyLock;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
